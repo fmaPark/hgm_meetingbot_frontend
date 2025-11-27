@@ -3,7 +3,7 @@ import axios from 'axios';
 import router from './router'; // 라우터 인스턴스 가져오기
 
 const apiClient = axios.create({
-  baseURL: 'http://localhost:8000/api', // FastAPI 서버 주소
+  baseURL: '/api', // FastAPI 서버 주소
   headers: {
     'Content-Type': 'application/json',
   },
