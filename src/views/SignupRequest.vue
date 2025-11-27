@@ -15,6 +15,10 @@
           <input id="username" v-model="username" type="text" placeholder="원하는 사용자 이름" required>
         </div>
         <div class="form-group">
+          <label for="email">이메일</label>
+          <input id="email" v-model="email" type="email" placeholder="이메일 주소" required>
+        </div>
+        <div class="form-group">
           <label for="password">비밀번호</label>
           <input id="password" v-model="password" type="password" placeholder="비밀번호" required>
         </div>
@@ -40,6 +44,7 @@ import { useRouter } from 'vue-router';
 import api from '../api.js'; // 경로 확인
 
 const username = ref('');
+const email = ref('');
 const password = ref('');
 const passwordConfirm = ref('');
 const isLoading = ref(false);
@@ -66,13 +71,14 @@ async function handleSignupRequest() {
   try {
     const response = await api.createSignupRequest({
       username: username.value,
+      email: email.value,
       password: password.value,
     });
-    alert(response.data.message);
+    alert("가입 요청이 성공적으로 전송되었습니다. 관리자 승인을 기다려주세요.");
     router.push('/login'); // 요청 성공 후 로그인 페이지로 이동
   } catch (error) {
     // <<-- 에러 메시지를 더 구체적으로 표시 -->>
-    if (error.response) {
+    if (error.response && error.response.data && error.response.data.detail) {
       // 백엔드에서 보낸 detail 메시지를 사용
       alert(error.response.data.detail);
     } else {
@@ -142,6 +148,7 @@ label {
 }
 
 .signup-box input[type="text"],
+.signup-box input[type="email"],
 .signup-box input[type="password"],
 .signup-box button {
   width: 100%;
@@ -152,6 +159,7 @@ label {
 }
 
 .signup-box input[type="text"],
+.signup-box input[type="email"],
 .signup-box input[type="password"] {
   border: 1px solid var(--border-color, #dee2e6);
 }

@@ -14,7 +14,14 @@ const isLoading = ref(false);
 const isSummarizing = ref({}); // 각 회의별 요약 진행 상태
 const pollingIntervalId = ref(null);
 
-const currentView = ref('meetings');
+const currentView = ref('meetings'); // 'meetings', 'requests', 'rbac_admin'
+
+// RBAC 관리 관련 상태
+const newRoleName = ref('');
+const newPermissionName = ref('');
+const selectedRoleForPermManagement = ref(null); // 역할에 권한을 부여하기 위해 선택된 역할
+const selectedPermissionsForRole = ref([]); // selectedRoleForPermManagement에 할당된 권한
+const rbacAdminTab = ref('roles'); // 'roles' or 'permissions' (RBAC 관리 탭)
 
 // 필터링을 위한 상태
 const selectedFilter = ref({ type: 'all', projectName: null, partName: null, title: '전체 회의 기록' });
@@ -32,7 +39,11 @@ const editingPart = ref(null);
 // 요약 관련 모달 상태
 const isPromptModalVisible = ref(false);
 const prompts = ref([]);
-const selectedPrompt = ref('');
+const keywords = ref([]);
+const models = ref([]); // 사용 가능한 모델 목록
+const selectedPrompt = ref(null);
+const selectedKeywords = ref(null);
+const selectedModel = ref(null);
 const meetingToSummarize = ref(null);
 const isSummaryModalVisible = ref(false);
 const summaryContent = ref('');
@@ -57,28 +68,30 @@ const copiedPartConfig = ref(null);
 const selectedPartsForPaste = ref([]);
 const isPasting = ref(false); 
 
-const isAdmin = ref(false);
+const currentUser = ref(null); // 현재 로그인한 사용자 정보 (ID, username, permissions 등)
+const currentUserPermissions = ref([]); // 현재 로그인한 사용자의 권한 목록
 
 // 유저 권한 모달 상태
 const isPermissionsModalVisible = ref(false); 
 
 const selectedUserForPerms = ref(null);
 const selectedPartIdsForUser = ref([]);
+const allRoles = ref([]); // 모든 역할 목록
+const allPermissions = ref([]); // 모든 권한 목록 (새로운 기능 권한)
+const selectedUserRoles = ref([]); // 선택된 유저의 역할
+const selectedUserPermissions = ref([]); // 선택된 유저의 기능 권한
+const currentPermissionTab = ref('parts'); // 'parts' or 'roles' (사용자 권한 모달 탭)
 
 const toast = ref({ visible: false, message: '', type: 'success' });
 
+// --- 권한 확인 Computed 속성 ---
+const hasPermission = computed(() => (permissionName) => {
+  return currentUserPermissions.value.includes(permissionName);
+});
+
 // --- 라이프사이클 훅 ---
 onMounted(async () => {
-  await checkAdminStatus(); // <<-- onMounted에서 호출
-  
-  // 관리자인 경우에만 관리자 전용 데이터를 불러옵니다.
-  const fetchPromises = [fetchProjects(), fetchMeetings()];
-  if (isAdmin.value) {
-    fetchPromises.push(fetchSignupRequests());
-    fetchPromises.push(fetchUsers());
-  }
-  
-  await Promise.all(fetchPromises);
+  loadInitialData();
   renderIcons();
   startPolling(); // 페이지 진입 시 폴링 시작
 });
@@ -88,65 +101,81 @@ onUnmounted(() => {
 });
 
 // --- API 호출 ---
-async function checkAdminStatus() {
-  try {
-    const response = await api.checkAdmin();
-    isAdmin.value = response.data.is_admin;
-  } catch (error) {
-    // 401 Unauthorized 등의 에러가 발생하면 관리자가 아닌 것으로 간주
-    isAdmin.value = false;
+async function loadInitialData() {
+  const userJson = localStorage.getItem('current-user');
+  if (userJson) {
+    try {
+      currentUser.value = JSON.parse(userJson);
+      currentUserPermissions.value = currentUser.value.permissions || [];
+    } catch (e) {
+      console.error("Failed to parse user data from localStorage", e);
+      api.logout();
+      router.push('/login');
+      return;
+    }
+  } else {
+    // This case should ideally be handled by the router guard,
+    // but as a fallback, we redirect to login.
+    api.logout();
+    router.push('/login');
+    return;
   }
+  
+  const fetchPromises = [fetchProjects(), fetchMeetings()];
+  
+  if (hasPermission.value('user:manage_approval')) {
+    fetchPromises.push(fetchSignupRequests());
+  }
+  if (hasPermission.value('user:read')) {
+    fetchPromises.push(fetchUsers());
+  }
+  if (hasPermission.value('rbac:manage')) {
+    fetchPromises.push(fetchRolesAndPermissions());
+  }
+  
+  await Promise.all(fetchPromises);
 }
 
 async function fetchProjects() {
   isLoading.value = true;
   try {
-    const response = await api.getProjects();
-    projects.value = response.data;
+    projects.value = await api.getProjects();
   } catch (error) {
     showToast("프로젝트 목록 로딩 실패", 'error');
   } finally {
     isLoading.value = false;
-    // renderIcons();
   }
 }
 
 async function fetchMeetings() {
   isLoading.value = true;
   try {
-    const response = await api.getMeetings();
-    meetings.value = response.data;
+    meetings.value = await api.getMeetings();
     console.log("Fetched meetings:", meetings.value);
   } catch (error) {
     showToast("회의 현황 로딩 실패", 'error');
   } finally {
     isLoading.value = false;
-    // renderIcons();
   }
 }
 
 async function fetchSignupRequests() {
   isLoading.value = true;
   try {
-    const response = await api.getPendingSignupRequests();
-    signupRequests.value = response.data;
+    signupRequests.value = await api.getPendingSignupRequests();
   } catch (error) {
-    // 관리자가 아닐 경우 403 Forbidden 에러가 발생할 수 있음
     if (error.response?.status !== 403) {
       showToast("가입 요청 목록 로딩 실패", 'error');
     }
   } finally {
     isLoading.value = false;
-    // renderIcons();
   }
 }
 
 async function fetchUsers() {
-  if (!isAdmin.value) return;
   isLoading.value = true;
   try {
-    const response = await api.getAllUsers();
-    users.value = response.data;
+    users.value = await api.getAllUsers();
   } catch (error) {
     if (error.response?.status !== 403) {
       showToast("사용자 목록 로딩 실패", 'error');
@@ -157,66 +186,217 @@ async function fetchUsers() {
   }
 }
 
-function openPermissionsModal() {
-  isPermissionsModalVisible.value = true;
-  // 모달이 열릴 때 첫 번째 사용자를 기본으로 선택
-  if (users.value.length > 0 && !selectedUserForPerms.value) {
-    selectedUserForPerms.value = users.value[0];
+async function fetchRolesAndPermissions() {
+  isLoading.value = true;
+  try {
+    const [rolesResponse, permissionsResponse] = await Promise.all([
+      api.getRoles(),
+      api.getPermissions()
+    ]);
+    allRoles.value = rolesResponse;
+    allPermissions.value = permissionsResponse;
+  } catch (error) {
+    showToast("역할 및 권한 목록을 불러오는 데 실패했습니다.", 'error');
+    console.error("Failed to fetch roles/permissions:", error);
+  } finally {
+    isLoading.value = false;
   }
-  renderIcons();
+}
+
+async function openPermissionsModal() {
+  isPermissionsModalVisible.value = true;
+  isLoading.value = true;
+  try {
+    if (allRoles.value.length === 0 || allPermissions.value.length === 0) {
+      await fetchRolesAndPermissions();
+    }
+    
+    if (users.value.length > 0 && !selectedUserForPerms.value) {
+      selectedUserForPerms.value = users.value[0];
+    }
+    if (selectedUserForPerms.value) {
+      selectedUserRoles.value = selectedUserForPerms.value.roles.map(roleName => {
+        const role = allRoles.value.find(r => r.name === roleName);
+        return role ? role.id : null;
+      }).filter(Boolean);
+      selectedUserPermissions.value = selectedUserForPerms.value.permissions.map(permName => {
+        const perm = allPermissions.value.find(p => p.name === permName);
+        return perm ? perm.id : null;
+      }).filter(Boolean);
+    }
+  } catch (error) {
+    showToast("역할 및 권한 목록을 불러오는 데 실패했습니다.", 'error');
+    console.error("Failed to fetch roles/permissions:", error);
+  } finally {
+    isLoading.value = false;
+    renderIcons();
+  }
 }
 
 function closePermissionsModal() {
   isPermissionsModalVisible.value = false;
   selectedUserForPerms.value = null;
+  selectedUserRoles.value = [];
+  selectedUserPermissions.value = [];
+  currentPermissionTab.value = 'parts';
 }
 
 watch(selectedUserForPerms, (newUser) => {
   if (newUser) {
     selectedPartIdsForUser.value = [...newUser.authorized_part_ids];
+    selectedUserRoles.value = newUser.roles.map(roleName => {
+      const role = allRoles.value.find(r => r.name === roleName);
+      return role ? role.id : null;
+    }).filter(Boolean);
+    selectedUserPermissions.value = newUser.permissions.map(permName => {
+      const perm = allPermissions.value.find(p => p.name === permName);
+      return perm ? perm.id : null;
+    }).filter(Boolean);
   } else {
     selectedPartIdsForUser.value = [];
+    selectedUserRoles.value = [];
+    selectedUserPermissions.value = [];
   }
 });
 
-async function handleSavePermissions() {
+async function handleSavePartPermissions() {
   if (!selectedUserForPerms.value) return;
   isLoading.value = true;
   try {
     await api.updateUserPermissions(selectedUserForPerms.value.id, selectedPartIdsForUser.value);
-    showToast(`'${selectedUserForPerms.value.username}' 사용자의 권한이 업데이트되었습니다.`, 'success');
+    showToast(`'${selectedUserForPerms.value.username}' 사용자의 파트 권한이 업데이트되었습니다.`, 'success');
     await fetchUsers();
     const updatedUser = users.value.find(u => u.id === selectedUserForPerms.value.id);
     if (updatedUser) selectedUserForPerms.value = updatedUser;
-    closePermissionsModal();
-  } catch (error) { showToast("권한 업데이트 실패", 'error'); } 
+  } catch (error) { showToast("파트 권한 업데이트 실패", 'error'); } 
   finally { isLoading.value = false; }
 }
+
+async function handleSaveUserRoles() {
+  if (!selectedUserForPerms.value) return;
+  isLoading.value = true;
+  try {
+    const currentRoleIds = selectedUserForPerms.value.roles.map(roleName => {
+      const role = allRoles.value.find(r => r.name === roleName);
+      return role ? role.id : null;
+    }).filter(Boolean);
+
+    const rolesToAdd = selectedUserRoles.value.filter(roleId => !currentRoleIds.includes(roleId));
+    const rolesToRemove = currentRoleIds.filter(roleId => !selectedUserRoles.value.includes(roleId));
+
+    const assignPromises = rolesToAdd.map(roleId => api.assignRole(selectedUserForPerms.value.id, roleId));
+    const revokePromises = rolesToRemove.map(roleId => api.revokeRole(selectedUserForPerms.value.id, roleId));
+
+    await Promise.all([...assignPromises, ...revokePromises]);
+
+    showToast(`'${selectedUserForPerms.value.username}' 사용자의 역할이 업데이트되었습니다.`, 'success');
+    await fetchUsers();
+    const updatedUser = users.value.find(u => u.id === selectedUserForPerms.value.id);
+    if (updatedUser) selectedUserForPerms.value = updatedUser;
+  } catch (error) {
+    showToast("역할 업데이트 실패", 'error');
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+async function handleCreateRole() {
+  if (!newRoleName.value.trim()) {
+    return showToast("역할 이름을 입력해주세요.", 'error');
+  }
+  isLoading.value = true;
+  try {
+    await api.createRole(newRoleName.value);
+    showToast(`'${newRoleName.value}' 역할이 생성되었습니다.`, 'success');
+    newRoleName.value = '';
+    await fetchRolesAndPermissions();
+  } catch (error) {
+    showToast(error.response?.data?.detail || "역할 생성 실패", 'error');
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+async function handleCreatePermission() {
+  if (!newPermissionName.value.trim()) {
+    return showToast("권한 이름을 입력해주세요.", 'error');
+  }
+  isLoading.value = true;
+  try {
+    await api.createPermission(newPermissionName.value);
+    showToast(`'${newPermissionName.value}' 권한이 생성되었습니다.`, 'success');
+    newPermissionName.value = '';
+    await fetchRolesAndPermissions();
+  } catch (error) {
+    showToast(error.response?.data?.detail || "권한 생성 실패", 'error');
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+async function handleAssignPermissionToRole() {
+  if (!selectedRoleForPermManagement.value) {
+    return showToast("권한을 할당할 역할을 선택해주세요.", 'error');
+  }
+  isLoading.value = true;
+  try {
+    const currentPermissionIds = selectedRoleForPermManagement.value.permissions.map(p => p.id);
+    const newPermissionIds = selectedPermissionsForRole.value;
+    const permsToAdd = newPermissionIds.filter(id => !currentPermissionIds.includes(id));
+    const permsToRemove = currentPermissionIds.filter(id => !newPermissionIds.includes(id));
+
+    const assignPromises = permsToAdd.map(pId => api.assignPermissionToRole(selectedRoleForPermManagement.value.id, pId));
+    const revokePromises = permsToRemove.map(pId => api.revokePermissionFromRole(selectedRoleForPermManagement.value.id, pId));
+
+    await Promise.all([...assignPromises, ...revokePromises]);
+
+    showToast(`'${selectedRoleForPermManagement.value.name}' 역할의 권한이 업데이트되었습니다.`, 'success');
+    await fetchRolesAndPermissions();
+
+    const updatedRole = allRoles.value.find(r => r.id === selectedRoleForPermManagement.value.id);
+    if (updatedRole) {
+      selectedRoleForPermManagement.value = updatedRole;
+    }
+  } catch (error) {
+    showToast("역할 권한 업데이트 실패", 'error');
+    console.error("Assign permission error:", error);
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+watch(selectedRoleForPermManagement, (newRole) => {
+  if (newRole && newRole.permissions) {
+    selectedPermissionsForRole.value = newRole.permissions.map(p => p.id);
+  } else {
+    selectedPermissionsForRole.value = [];
+  }
+}, { deep: true });
+
+watch(rbacAdminTab, (newTab) => {
+  if (newTab === 'roles' && !selectedRoleForPermManagement.value && allRoles.value.length > 0) {
+    selectedRoleForPermManagement.value = allRoles.value[0];
+  }
+});
 
 async function handleApprove(requestId) {
   if (!confirm("이 가입 요청을 승인하시겠습니까?")) return;
   isLoading.value = true;
-
-  // <<-- 1. 승인 작업 try-catch -->>
   try {
     const response = await api.approveSignupRequest(requestId);
-    showToast(response.data.message, 'success');
+    showToast(response.message, 'success');
   } catch (error) {
     showToast(error.response?.data?.detail || "승인 처리 중 오류 발생", 'error');
     console.error("Approval error:", error);
-    isLoading.value = false; // 에러 발생 시 로딩 종료
-    return; // 여기서 함수 실행 중단
+    isLoading.value = false;
+    return;
   }
 
-  // <<-- 2. 목록 새로고침 try-catch -->>
   try {
-    // 승인이 성공한 후에만 목록을 새로고침합니다.
     await fetchSignupRequests();
   } catch (error) {
-    // 목록 새로고침 실패는 별도의 에러로 처리 (이미 fetchSignupRequests 내부에 토스트가 있음)
     console.error("Failed to refresh signup requests after approval:", error);
   } finally {
-    // 모든 작업이 끝난 후 로딩 상태 해제
     isLoading.value = false;
   }
 }
@@ -224,11 +404,9 @@ async function handleApprove(requestId) {
 async function handleReject(requestId) {
   if (!confirm("이 가입 요청을 거절하시겠습니까?")) return;
   isLoading.value = true;
-
-  // <<-- 동일한 패턴 적용 -->>
   try {
     const response = await api.rejectSignupRequest(requestId);
-    showToast(response.data.message, 'success');
+    showToast(response.message, 'success');
   } catch (error) {
     showToast(error.response?.data?.detail || "거절 처리 중 오류 발생", 'error');
     isLoading.value = false;
@@ -246,15 +424,22 @@ async function handleReject(requestId) {
 
 function handleLogout() {
   if (confirm("로그아웃 하시겠습니까?")) {
-    // 1. API 모듈의 로그아웃 함수 호출
+    localStorage.removeItem('current-user');
     api.logout();
-    // 2. 로그인 페이지로 리디렉션
     router.push('/login');
   }
 }
 
-// --- 필터링 로직 ---
+function goToPromptsAndKeywords() {
+  router.push({ name: 'PromptsAndKeywords' });
+}
+
+function goToLlmSettings() {
+  router.push({ name: 'LLMSettings' });
+}
+
 const filteredMeetings = computed(() => {
+  if (!meetings.value) return [];
   const { type, projectName, partName } = selectedFilter.value;
   if (type === 'all') return meetings.value;
   if (type === 'project') return meetings.value.filter(m => m.project === projectName);
@@ -272,7 +457,6 @@ function setFilter(type, project = null, part = null) {
   }
 }
 
-// --- 설정 모달 핸들러 ---
 function openSettingsModal() { 
   if (projects.value.length > 0 && !selectedProjectForConfig.value) {
       selectedProjectForConfig.value = projects.value[0];
@@ -280,6 +464,7 @@ function openSettingsModal() {
   isSettingsModalVisible.value = true; 
   renderIcons(); 
 }
+
 function closeSettingsModal() { 
   isSettingsModalVisible.value = false;
   copiedPartConfig.value = null;
@@ -303,12 +488,10 @@ async function handlePasteConfig() {
   showToast(`${selectedPartsForPaste.value.length}개의 파트에 설정을 적용합니다...`, 'success');
   
   try {
-    // 선택된 각 파트에 대해 업데이트 API를 병렬로 호출
     const updatePromises = selectedPartsForPaste.value.map(partId => {
       const partToUpdate = selectedProjectForConfig.value.parts.find(p => p.id === partId);
-      if (!partToUpdate) return Promise.resolve(); // 혹시 모를 경우 대비
+      if (!partToUpdate) return Promise.resolve();
       
-      // 기존 파트 정보에 복사된 설정을 덮어씌움
       const payload = {
         ...partToUpdate,
         ...copiedPartConfig.value
@@ -318,12 +501,10 @@ async function handlePasteConfig() {
     
     await Promise.all(updatePromises);
     
-    // 작업 완료 후 상태 초기화 및 데이터 새로고침
     copiedPartConfig.value = null;
     selectedPartsForPaste.value = [];
-    await fetchProjects(); // 변경사항을 반영하기 위해 프로젝트 목록 새로고침
+    await fetchProjects();
     
-    // selectedProjectForConfig도 갱신된 정보로 업데이트
     const updatedProject = projects.value.find(p => p.id === selectedProjectForConfig.value.id);
     if(updatedProject) selectedProjectForConfig.value = updatedProject;
 
@@ -369,10 +550,8 @@ async function openSummarySelectModal(meeting) {
   summariesForSelection.value = meeting.artifacts.summary_paths || [];
   
   if (summariesForSelection.value.length > 0) {
-    // 첫 번째 요약을 기본으로 선택하고 미리보기 로드
     selectedSummaryPath.value = summariesForSelection.value[0];
   } else {
-    // 요약 파일이 없는 예외적인 경우
     selectedSummaryPath.value = null;
     summaryPreviewContent.value = "표시할 요약 파일이 없습니다.";
   }
@@ -383,7 +562,6 @@ async function openSummarySelectModal(meeting) {
 
 function closeSummarySelectModal() {
   isSummarySelectModalVisible.value = false;
-  // 모든 관련 상태 초기화
   summariesForSelection.value = [];
   selectedSummaryPath.value = null;
   summaryPreviewContent.value = '';
@@ -396,7 +574,7 @@ async function handleConfirmUpload() {
   isLoading.value = true;
   try {
     const response = await api.uploadSummary(meetingForUpload.value.id, selectedSummaryPath.value);
-    showToast(response.data.message, 'success');
+    showToast(response.message, 'success');
     closeSummarySelectModal();
   } catch (error) {
     showToast("업로드 실패", 'error');
@@ -409,8 +587,7 @@ watch(selectedSummaryPath, async (newPath) => {
   if (newPath) {
     summaryPreviewContent.value = "미리보기 로딩 중...";
     try {
-      const response = await api.getSummaryContent(meetingForUpload.value.id, newPath);
-      summaryPreviewContent.value = response.data;
+      summaryPreviewContent.value = await api.getSummaryContent(meetingForUpload.value.id, newPath);
     } catch {
       summaryPreviewContent.value = "내용을 불러올 수 없습니다.";
     }
@@ -433,25 +610,21 @@ function cancelEditing() {
 }
 
 function startPolling() {
-  if (pollingIntervalId.value) return; // 이미 실행 중이면 중복 실행 방지
+  if (pollingIntervalId.value) return;
   
   pollingIntervalId.value = setInterval(async () => {
-    // 백그라운드에서 조용히 데이터 갱신
     try {
-      const response = await api.getMeetings();
-      meetings.value = response.data;
+      meetings.value = await api.getMeetings();
       renderIcons();
-
-      // 처리 중인 작업이 더 이상 없으면 폴링 중지
-      const isStillProcessing = response.data.some(m => m.status === 'PROCESSING');
+      const isStillProcessing = meetings.value.some(m => m.status === 'PROCESSING');
       if (!isStillProcessing) {
         stopPolling();
       }
     } catch (error) {
       console.error("Polling failed:", error);
-      stopPolling(); // 에러 발생 시 폴링 중지
+      stopPolling();
     }
-  }, 5000); // 5초마다 확인
+  }, 5000);
 }
 
 function stopPolling() {
@@ -474,7 +647,7 @@ async function handleAddPart() {
     await api.addPart(selectedProjectForConfig.value.name, payload);
     cancelEditing();
     await fetchProjects();
-    await fetchMeetings(); // 파트 추가/수정이 회의 기록 표시에도 영향을 줄 수 있으므로 갱신
+    await fetchMeetings();
     showToast("파트가 성공적으로 추가되었습니다.", 'success');
   } catch (error) { 
     showToast("파트 추가 실패", 'error'); 
@@ -491,7 +664,7 @@ async function handleUpdatePart() {
     await api.updatePart(editingPart.value.id, payload);
     cancelEditing();
     await fetchProjects();
-    await fetchMeetings(); // 파트 추가/수정이 회의 기록 표시에도 영향을 줄 수 있으므로 갱신
+    await fetchMeetings();
     showToast("파트 정보가 업데이트되었습니다.", 'success');
   } catch (error) { 
     showToast("파트 수정 실패", 'error'); 
@@ -500,19 +673,33 @@ async function handleUpdatePart() {
   }
 }
 
-// --- 요약 관련 핸들러 ---
 async function openPromptModal(meeting) {
   isLoading.value = true;
   try {
-    const response = await api.getPrompts(meeting.id);
-    prompts.value = response.data;
+    const [promptsResponse, keywordsResponse, modelsResponse] = await Promise.all([
+      api.getPrompts(),
+      api.getKeywords(),
+      api.getModels(),
+    ]);
+    
+    prompts.value = promptsResponse;
+    keywords.value = keywordsResponse;
+    models.value = modelsResponse;
+
     if (prompts.value.length > 0) {
-      selectedPrompt.value = prompts.value[0];
+      selectedPrompt.value = prompts.value[0].name;
     }
+    if (keywords.value.length > 0) {
+      selectedKeywords.value = keywords.value[0].name;
+    }
+    if (models.value.length > 0) {
+      selectedModel.value = models.value[0];
+    }
+    
     meetingToSummarize.value = meeting;
     isPromptModalVisible.value = true;
   } catch (error) {
-    showToast("프롬프트 목록을 불러오는 데 실패했습니다.", 'error');
+    showToast("프롬프트, 키워드 또는 모델 목록을 불러오는 데 실패했습니다.", 'error');
   } finally {
     isLoading.value = false;
     renderIcons();
@@ -522,33 +709,38 @@ async function openPromptModal(meeting) {
 function closePromptModal() {
   isPromptModalVisible.value = false;
   prompts.value = [];
-  selectedPrompt.value = '';
+  keywords.value = [];
+  selectedPrompt.value = null;
+  selectedKeywords.value = null;
   meetingToSummarize.value = null;
 }
 
 async function handleConfirmSummarize() {
-  if (!selectedPrompt.value) {
-    showToast("프롬프트를 선택해주세요.", 'error');
+  if (!selectedPrompt.value || !selectedKeywords.value || !selectedModel.value) {
+    showToast("모델, 프롬프트, 키워드를 모두 선택해주세요.", 'error');
     return;
   }
-  // console.log("선택된 프롬프트:", selectedPrompt.value);
-  const prompt_value = selectedPrompt.value;
+
   isLoading.value = true;
   const meetingId = meetingToSummarize.value.id;
   isSummarizing.value[meetingId] = true;
   closePromptModal();
   
   try {
-    const response = await api.summarizeMeeting(meetingId, prompt_value);
-    const index = meetings.value.findIndex(m => m.id === response.data.id);
-    if (index !== -1) meetings.value[index] = response.data;
+    const payload = {
+      model: selectedModel.value,
+      instruction_name: selectedPrompt.value,
+      keywords_name: selectedKeywords.value,
+    };
+    const response = await api.summarizeMeeting(meetingId, payload);
+    const index = meetings.value.findIndex(m => m.id === response.id);
+    if (index !== -1) meetings.value[index] = response;
     
     showToast("요약 작업이 시작되었습니다. 완료되면 자동으로 업데이트됩니다.", 'success');
-    startPolling(); // 요약 작업 시작 후 폴링 시작/재시작
-    // await fetchMeetings();
-    // showToast("요약 작업이 성공적으로 완료되었습니다.", 'success');
+    startPolling();
   } catch (error) {
     showToast("요약 작업 실패", 'error');
+    isSummarizing.value[meetingId] = false;
   } finally {
     isLoading.value = false;
     renderIcons();
@@ -561,9 +753,7 @@ async function handleFetchAsanaConfig() {
   }
   isFetchingAsana.value = true;
   try {
-    const response = await api.getAsanaConfigFromUrl(asanaImportData.value);
-    // API 응답으로 partFormData의 asana_config를 업데이트
-    partFormData.value.asana_config = response.data;
+    partFormData.value.asana_config = await api.getAsanaConfigFromUrl(asanaImportData.value);
     showToast("Asana 설정을 성공적으로 가져왔습니다.", 'success');
   } catch (error) {
     showToast(error.response?.data?.detail || "Asana 설정 가져오기 실패", 'error');
@@ -572,7 +762,6 @@ async function handleFetchAsanaConfig() {
   }
 }
 
-// --- 유틸리티 함수 ---
 const statusClassMap = {
   RECORDING: 'recording',
   STOPPED: 'stopped',
@@ -594,7 +783,6 @@ function formatDateTime(isoString) {
 
 function renderIcons() {
   nextTick(() => {
-    // @ts-ignore
     if(window.feather) feather.replace();
   });
 }
@@ -615,9 +803,6 @@ function showToast(message, type = 'success') {
   }, 3000);
 }
 watch(currentView, (newView, oldView) => {
-  // currentView의 값이 변경될 때마다 실행됩니다.
-  // nextTick을 사용하여 Vue가 DOM 업데이트를 완료한 후에
-  // 아이콘을 다시 그리도록 합니다.
   renderIcons();
 });
 </script>
@@ -636,14 +821,34 @@ watch(currentView, (newView, oldView) => {
           <button class="btn-icon" @click="closePromptModal"><i data-feather="x"></i></button>
         </header>
         <div class="prompt-select-wrapper">
-          <label for="prompt-select">사용할 프롬프트를 선택하세요:</label>
-          <select id="prompt-select" v-model="selectedPrompt" class="prompt-select">
-            <option v-for="(prompt, index) in prompts" :key="index" :value="prompt">{{ prompt }}</option>
-          </select>
+          
+          <div class="form-group">
+            <label for="model-select">LLM 모델</label>
+            <select id="model-select" v-model="selectedModel">
+              <option v-for="model in models" :key="model" :value="model">{{ model }}</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="prompt-select">지시 프롬프트</label>
+            <select id="prompt-select" v-model="selectedPrompt">
+              <option v-if="!prompts.length" disabled value="">사용 가능한 프롬프트가 없습니다</option>
+              <option v-for="prompt in prompts" :key="prompt.id" :value="prompt.name">{{ prompt.name }}</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="keywords-select">키워드 세트</label>
+            <select id="keywords-select" v-model="selectedKeywords">
+              <option v-if="!keywords.length" disabled value="">사용 가능한 키워드가 없습니다</option>
+              <option v-for="keyword in keywords" :key="keyword.id" :value="keyword.name">{{ keyword.name }}</option>
+            </select>
+          </div>
+
         </div>
         <div class="modal-actions">
           <button class="btn-secondary" @click="closePromptModal">취소</button>
-          <button class="btn-primary" @click="handleConfirmSummarize">요약 실행</button>
+          <button class="btn-primary" @click="handleConfirmSummarize" :disabled="!selectedPrompt || !selectedKeywords || !selectedModel">요약 실행</button>
         </div>
       </div>
     </div>
@@ -726,32 +931,31 @@ watch(currentView, (newView, oldView) => {
               <table v-if="selectedProjectForConfig.parts.length > 0">
                 <thead>
                   <tr>
-                    <th class="checkbox-cell"><input type="checkbox" v-model="isAllSelected"></th>
+                    <th></th>
                     <th>파트 이름</th><th>드라이브 ID</th><th>Asana ID</th><th class="actions">액션</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-for="part in selectedProjectForConfig.parts" :key="part.id">
                     <!-- 1. 체크박스 셀 -->
-                    <td class="checkbox-cell">
-                      <div class="cell-wrapper">
+                    <td>
+                      <div>
                         <input type="checkbox" :value="part.id" v-model="selectedPartsForPaste">
                       </div>
                     </td>
                     
                     <!-- 2. 파트 이름 셀 -->
-                    <td><div class="cell-wrapper">{{ part.name }}</div></td>
+                    <td><div>{{ part.name }}</div></td>
                     
                     <!-- 3. 드라이브 ID 셀 -->
-                    <td><div class="cell-wrapper">{{ part.drive_folder_id || '—' }}</div></td>
+                    <td><div>{{ part.drive_folder_id || '—' }}</div></td>
                     
                     <!-- 4. Asana ID 셀 -->
-                    <td><div class="cell-wrapper">{{ part.asana_config ? part.asana_config.project_id : '—' }}</div></td>
+                    <td><div>{{ part.asana_config ? part.asana_config.project_id : '—' }}</div></td>
                     
                     <!-- 5. 액션 셀 -->
-                    <td class="actions">
-                      <!-- 'cell-wrapper'와 'action-buttons' 클래스를 모두 가짐 -->
-                      <div class="cell-wrapper action-buttons">
+                    <td>
+                      <div>
                         <button class="btn-icon" @click="copyPartConfig(part)" title="설정 복사">
                           <i data-feather="copy"></i>
                         </button>
@@ -829,24 +1033,55 @@ watch(currentView, (newView, oldView) => {
           </aside>
           <main class="permission-config-main">
             <section v-if="selectedUserForPerms">
-              <h3><i data-feather="user-check"></i> {{ selectedUserForPerms.username }} / 파트 권한 설정</h3>
-              <div class="permission-tree">
-                <p v-if="projects.length === 0 && !isLoading">설정된 프로젝트가 없습니다.</p>
-                <div v-for="project in projects" :key="project.id" class="project-group-perms">
-                  <h4>{{ project.name }}</h4>
-                  <div v-for="part in project.parts" :key="part.id" class="part-item-perms">
+              <h3><i data-feather="user-check"></i> {{ selectedUserForPerms.username }} 권한 설정</h3>
+              
+              <div class="permission-tabs">
+                <button :class="{ active: currentPermissionTab === 'parts' }" @click="currentPermissionTab = 'parts'">
+                  <i data-feather="hard-drive"></i> 파트 권한
+                </button>
+                <button :class="{ active: currentPermissionTab === 'roles' }" @click="currentPermissionTab = 'roles'">
+                  <i data-feather="users"></i> 역할 관리
+                </button>
+              </div>
+
+              <div v-if="currentPermissionTab === 'parts'">
+                <h4><i data-feather="folder"></i> 파트 접근 권한</h4>
+                <div class="permission-tree">
+                  <p v-if="projects.length === 0 && !isLoading">설정된 프로젝트가 없습니다.</p>
+                  <div v-for="project in projects" :key="project.id" class="project-group-perms">
+                    <h4>{{ project.name }}</h4>
+                    <div v-for="part in project.parts" :key="part.id" class="part-item-perms">
+                      <label>
+                        <input type="checkbox" :value="part.id" v-model="selectedPartIdsForUser">
+                        {{ part.name }}
+                      </label>
+                    </div>
+                  </div>
+                </div>
+                <div class="form-actions">
+                  <button class="btn-primary" @click="handleSavePartPermissions" :disabled="isLoading">
+                    <i data-feather="save"></i> 파트 권한 저장
+                  </button>
+                </div>
+              </div>
+
+              <div v-if="currentPermissionTab === 'roles'">
+                <h4><i data-feather="user-check"></i> 사용자 역할 할당</h4>
+                <div class="permission-list-grid">
+                  <div v-for="role in allRoles" :key="role.id" class="permission-item-grid">
                     <label>
-                      <input type="checkbox" :value="part.id" v-model="selectedPartIdsForUser">
-                      {{ part.name }}
+                      <input type="checkbox" :value="role.id" v-model="selectedUserRoles">
+                      {{ role.name }}
                     </label>
                   </div>
                 </div>
+                <div class="form-actions">
+                  <button class="btn-primary" @click="handleSaveUserRoles" :disabled="isLoading">
+                    <i data-feather="save"></i> 역할 저장
+                  </button>
+                </div>
               </div>
-              <div class="form-actions">
-                <button class="btn-primary" @click="handleSavePermissions" :disabled="isLoading">
-                  <i data-feather="save"></i> 권한 저장
-                </button>
-              </div>
+
             </section>
             <section v-else class="placeholder">
               <p>왼쪽에서 사용자를 선택하여 권한을 설정하세요.</p>
@@ -890,9 +1125,15 @@ watch(currentView, (newView, oldView) => {
       <main class="main-content">
         <header class="main-header">
           <h1><i data-feather="grid"></i> 대시보드</h1>
-          <div>
-            <button v-if="isAdmin" class="btn-secondary" @click="openPermissionsModal">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <button v-if="hasPermission('settings:manage_llm')" class="btn-secondary" @click="goToLlmSettings">
+                <i data-feather="key"></i> LLM 설정
+            </button>
+            <button v-if="hasPermission('user:update_permissions')" class="btn-secondary" @click="openPermissionsModal">
               <i data-feather="users"></i> 권한 관리
+            </button>
+            <button class="btn-secondary" @click="goToPromptsAndKeywords">
+                <i data-feather="file-text"></i> 프롬프트/키워드
             </button>
             <button class="btn-danger" @click="handleLogout">
               <i data-feather="log-out"></i> 로그아웃
@@ -905,9 +1146,13 @@ watch(currentView, (newView, oldView) => {
             <i data-feather="activity"></i> 회의 현황
             </button>
             <!--  가입 요청 관리 탭 추가 -->
-            <button v-if="isAdmin" @click="currentView = 'requests'" :class="{ active: currentView === 'requests' }">
+            <button v-if="hasPermission('user:manage_approval')" @click="currentView = 'requests'" :class="{ active: currentView === 'requests' }">
             <i data-feather="user-plus"></i> 가입 요청
             <span v-if="signupRequests.length > 0" class="badge notification-badge">{{ signupRequests.length }}</span>
+            </button>
+            <!-- RBAC 관리 탭 추가 -->
+            <button v-if="hasPermission('rbac:manage')" @click="currentView = 'rbac_admin'; fetchRolesAndPermissions()" :class="{ active: currentView === 'rbac_admin' }">
+              <i data-feather="shield"></i> RBAC 관리
             </button>
         </nav>
         <div v-if="currentView === 'meetings'">
@@ -1000,6 +1245,97 @@ watch(currentView, (newView, oldView) => {
             <p v-else class="empty-state">대기 중인 가입 요청이 없습니다.</p>
             </section>
         </div>
+        <!-- RBAC 관리 섹션 시작 -->
+        <div v-if="currentView === 'rbac_admin'">
+          <section class="card rbac-admin-section">
+            <h2><i data-feather="shield"></i> RBAC 관리</h2>
+            
+            <div class="main-nav permission-tabs">
+                <button :class="{ active: rbacAdminTab === 'roles' }" @click="rbacAdminTab = 'roles'">
+                  <i data-feather="users"></i> 역할 관리
+                </button>
+                <button :class="{ active: rbacAdminTab === 'permissions' }" @click="rbacAdminTab = 'permissions'">
+                  <i data-feather="key"></i> 권한 관리
+                </button>
+            </div>
+
+            <div v-if="rbacAdminTab === 'roles'">
+              <div class="rbac-grid">
+                <div class="rbac-sidebar">
+                  <h3><i data-feather="list"></i> 역할 목록</h3>
+                  <form @submit.prevent="handleCreateRole" class="rbac-create-form">
+                    <input type="text" v-model="newRoleName" placeholder="새 역할 이름" :disabled="isLoading">
+                    <button type="submit" class="btn-primary" :disabled="isLoading || !newRoleName.trim()">
+                      <i v-if="!isLoading" data-feather="plus"></i>
+                      <span v-else class="loader"></span>
+                      생성
+                    </button>
+                  </form>
+                  <ul class="rbac-list">
+                    <li v-for="role in allRoles" :key="role.id" @click="selectedRoleForPermManagement = role"
+                        :class="{ active: selectedRoleForPermManagement && selectedRoleForPermManagement.id === role.id }">
+                      <div class="role-item-content">
+                        <span>{{ role.name }}</span>
+                        <div class="role-permissions">
+                          <span v-for="perm in role.permissions" :key="perm.id" class="permission-tag">
+                            {{ perm.name }}
+                          </span>
+                        </div>
+                      </div>
+                    </li>
+                  </ul>
+                </div>
+                <div class="rbac-main">
+                  <section v-if="selectedRoleForPermManagement">
+                    <h3><i data-feather="user-check"></i> '{{ selectedRoleForPermManagement.name }}' 역할 권한 설정</h3>
+                    <h4><i data-feather="key"></i> 할당 가능한 권한</h4>
+                    <div class="permission-list-grid">
+                      <div v-for="permission in allPermissions" :key="permission.id" class="permission-item-grid">
+                        <label>
+                          <input type="checkbox" :value="permission.id" v-model="selectedPermissionsForRole">
+                          {{ permission.name }}
+                        </label>
+                      </div>
+                    </div>
+                    <div class="form-actions">
+                      <button class="btn-primary" @click="handleAssignPermissionToRole" :disabled="isLoading">
+                        <i data-feather="save"></i> 역할 권한 저장
+                      </button>
+                    </div>
+                  </section>
+                  <section v-else class="placeholder">
+                    <p>왼쪽에서 역할을 선택하여 권한을 설정하세요.</p>
+                  </section>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="rbacAdminTab === 'permissions'">
+              <div class="rbac-grid">
+                <div class="rbac-sidebar">
+                  <h3><i data-feather="list"></i> 권한 목록</h3>
+                  <form @submit.prevent="handleCreatePermission" class="rbac-create-form">
+                    <input type="text" v-model="newPermissionName" placeholder="새 권한 이름" :disabled="isLoading">
+                    <button type="submit" class="btn-primary" :disabled="isLoading || !newPermissionName.trim()">
+                      <i v-if="!isLoading" data-feather="plus"></i>
+                      <span v-else class="loader"></span>
+                      생성
+                    </button>
+                  </form>
+                  <ul class="rbac-list">
+                    <li v-for="permission in allPermissions" :key="permission.id">
+                      <span>{{ permission.name }}</span>
+                    </li>
+                  </ul>
+                </div>
+                <div class="rbac-main placeholder">
+                  <p>선택된 권한에 대한 상세 정보 또는 편집 기능은 추후 추가될 수 있습니다.</p>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+        <!-- RBAC 관리 섹션 종료 -->
       </main>
     </div>
   </div>
@@ -1133,7 +1469,7 @@ hr { border: none; border-top: 1px solid var(--border-color); margin: 1.5rem 0; 
 .modal-content { background-color: white; padding: 0; border-radius: var(--border-radius); box-shadow: 0 10px 30px rgba(0,0,0,0.2); width: 80%; max-width: 800px; max-height: 80vh; display: flex; flex-direction: column; overflow: hidden; }
 .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 2rem; border-bottom: 1px solid var(--border-color); }
 .modal-header h2 { margin: 0; font-size: 1.5rem; display: flex; align-items: center; gap: 0.75rem; }
-.summary-text { flex-grow: 1; overflow-y: auto; background-color: var(--hover-bg-color); padding: 1rem; margin: 1.5rem; border-radius: 6px; white-space: pre-wrap; word-wrap: break-word; font-family: monospace; line-height: 1.5; }
+.summary-text { flex-grow: 1; overflow-y: auto; background-color: var(--hover-bg-color); padding: 1rem; margin: 1.5rem; border-radius: 6px; white-space: pre-wrap; word-wrap: break-word; font-family: monospace; line-height: 1.5; margin: 0; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 1rem; padding: 1.5rem 2rem; border-top: 1px solid var(--border-color); background-color: var(--hover-bg-color); }
 .prompt-select-wrapper { margin: 1.5rem; display: flex; flex-direction: column; gap: 0.75rem; }
 .prompt-select-wrapper label { font-weight: 600; color: var(--text-color-light); }
@@ -1535,5 +1871,169 @@ td.actions .action-buttons {
   margin-top: 2rem;
   padding-top: 1.5rem;
   border-top: 1px solid var(--border-color);
+}
+
+/* RBAC Admin Section Styles */
+.rbac-admin-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.rbac-admin-section .main-nav.permission-tabs {
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0; /* Remove default padding from main-nav */
+}
+
+.rbac-admin-section .main-nav.permission-tabs button {
+  border-bottom: 3px solid transparent;
+  padding-bottom: 1rem;
+  border-radius: 0;
+  background-color: transparent;
+  color: var(--text-color-light);
+}
+
+.rbac-admin-section .main-nav.permission-tabs button.active {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  background-color: transparent;
+}
+.rbac-admin-section .main-nav.permission-tabs button:hover:not(.active) {
+  background-color: var(--hover-bg-color);
+}
+
+
+.rbac-grid {
+  display: flex;
+  gap: 1.5rem;
+  min-height: 400px; /* 최소 높이 설정 */
+}
+
+.rbac-sidebar {
+  width: 300px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border-color);
+  padding-right: 1.5rem;
+  overflow-y: auto;
+}
+
+.rbac-main {
+  flex-grow: 1;
+  overflow-y: auto;
+}
+
+.rbac-sidebar h3 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.1rem;
+}
+
+.rbac-create-form {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.rbac-create-form input {
+  flex-grow: 1;
+}
+
+.rbac-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.rbac-list li {
+  display: flex;
+  flex-direction: column; /* 자식 요소들을 세로로 정렬 */
+  align-items: flex-start; /* 왼쪽 정렬 */
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.5rem;
+  background-color: var(--hover-bg-color);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.rbac-list li:hover {
+  background-color: var(--active-bg-color);
+}
+
+.rbac-list li.active {
+  background-color: var(--primary-color);
+  color: white;
+}
+.rbac-list li.active .permission-tag {
+  background-color: var(--primary-color-dark);
+}
+
+.role-item-content {
+  width: 100%;
+}
+.role-permissions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+}
+
+.permission-tag {
+  background-color: var(--active-bg-color);
+  color: var(--text-color-light);
+  font-size: 0.75em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+.rbac-list li.active .permission-tag {
+    background-color: #ffffff33;
+    color: white;
+}
+
+.rbac-main section h3 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.rbac-main section h4 {
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.5rem;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.permission-list-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+
+.permission-item-grid {
+  background-color: var(--hover-bg-color);
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+}
+
+.permission-item-grid label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.permission-item-grid input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary-color);
 }
 </style>

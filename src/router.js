@@ -3,12 +3,16 @@ import { createRouter, createWebHistory } from 'vue-router';
 import Dashboard from './views/Dashboard.vue'; 
 import Login from './views/Login.vue';
 import SignupRequest from './views/SignupRequest.vue';
+import PromptsAndKeywords from './views/PromptsAndKeywords.vue';
+import LLMSettings from './views/LLMSettings.vue';
 // import Permissions from './views/Permissions.vue';
 
 const routes = [
   { path: '/', name: 'Dashboard', component: Dashboard },
   { path: '/login', name: 'Login', component: Login },
   { path: '/signup-request', name: 'SignupRequest', component: SignupRequest },
+  { path: '/prompts-and-keywords', name: 'PromptsAndKeywords', component: PromptsAndKeywords },
+  { path: '/admin/llm-settings', name: 'LLMSettings', component: LLMSettings },
   // { path: '/permissions', name: 'Permissions', component: Permissions },
 ];
 

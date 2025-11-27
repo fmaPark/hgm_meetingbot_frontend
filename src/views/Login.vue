@@ -46,9 +46,11 @@ onMounted(() => {
 async function handleLogin() {
   isLoading.value = true;
   try {
-    const response = await api.login(username.value, password.value);
-    localStorage.setItem('user-token', response.data.access_token);
-    api.setAuthHeader(response.data.access_token);
+    const loginResponse = await api.login(username.value, password.value);
+    localStorage.setItem('user-token', loginResponse.access_token);
+    // Store the full user object including permissions
+    localStorage.setItem('current-user', JSON.stringify(loginResponse.user));
+    api.setAuthHeader(loginResponse.access_token);
     router.push('/'); // 로그인 성공 시 대시보드로 이동
   } catch (error) {
     alert("로그인 실패: 사용자 이름 또는 비밀번호를 확인하세요.");
