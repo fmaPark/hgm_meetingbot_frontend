@@ -9,60 +9,12 @@ const apiClient = axios.create({
   },
 });
 
-// Axios 응답 인터셉터 추가
-apiClient.interceptors.response.use(
-  (response) => {
-    // 2xx 범위에 있는 상태 코드는 이 함수를 트리거합니다.
-    return response;
-  },
-  async (error) => {
-    const originalRequest = error.config;
-
-    // 1. 토큰 재발급 요청 자체에서 에러가 발생한 경우 (예: 리프레시 토큰 만료)
-    // 이 경우, 무한 루프를 방지하기 위해 즉시 로그아웃 처리합니다.
-    if (originalRequest.url === '/token/refresh') {
-      console.error("Refresh token is invalid or expired. Logging out.", error);
-      api.logout(); // 아래 api 객체가 정의된 후에야 사용 가능하므로, 위치에 주의해야 합니다.
-      router.push({ name: 'Login' });
-      return Promise.reject(error);
-    }
-
-    // 2. 그 외의 401 에러이며, 아직 재시도되지 않은 요청인 경우
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-      
-      try {
-        const refreshResponse = await api.refreshToken();
-        const { access_token, refresh_token } = refreshResponse.data;
-
-        localStorage.setItem('user-token', access_token);
-        localStorage.setItem('refresh-token', refresh_token);
-        
-        // api.setAuthHeader를 통해 apiClient의 기본 헤더를 업데이트합니다.
-        api.setAuthHeader(access_token);
-        
-        // 실패했던 원래 요청의 헤더도 새로운 토큰으로 교체합니다.
-        originalRequest.headers['Authorization'] = `Bearer ${access_token}`;
-        
-        // 원래 요청을 다시 실행합니다.
-        return apiClient(originalRequest);
-      } catch (refreshError) {
-        console.error("Unable to refresh token, logging out.", refreshError);
-        api.logout();
-        router.push({ name: 'Login' });
-        return Promise.reject(refreshError);
-      }
-    }
-    
-    // 그 외 모든 에러는 그대로 반환합니다.
-    return Promise.reject(error);
-  }
-);
-
-
 const api = {
   getModels() {
     return apiClient.get('/models').then(response => response.data);
+  },
+  getSttModels() {
+    return apiClient.get('/stt-models').then(response => response.data);
   },
   getProjects() {
     return apiClient.get('/projects').then(response => response.data);
@@ -106,6 +58,9 @@ const api = {
   summarizeMeeting(meetingId, data) {
     return apiClient.post(`/meetings/${meetingId}/summarize`, data).then(response => response.data);
   },
+  transcribeMeeting(meetingId, data) {
+    return apiClient.post(`/meetings/${meetingId}/transcribe`, data).then(response => response.data);
+  },
   getSummaryContent(meetingId, path) {
     return apiClient.get(`/meetings/${meetingId}/summary-content?path=${encodeURIComponent(path)}`).then(response => response.data);
   },
@@ -122,52 +77,11 @@ const api = {
       delete apiClient.defaults.headers.common['Authorization'];
     }
   },
-  login(username, password) {
-    const params = new URLSearchParams();
-    params.append('username', username);
-    params.append('password', password);
-    return apiClient.post('/token', params, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    }).then(response => {
-      localStorage.setItem('user-token', response.data.access_token);
-      localStorage.setItem('refresh-token', response.data.refresh_token);
-      return response.data;
-    });
-  },
-  refreshToken() {
-    const refreshToken = localStorage.getItem('refresh-token');
-    if (!refreshToken) {
-      return Promise.reject(new Error('No refresh token available.'));
-    }
-    const params = new URLSearchParams();
-    params.append('refresh_token', refreshToken);
-    // This one is special, it's called by the interceptor which needs the full response
-    return apiClient.post('/token/refresh', params, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    });
-  },
-  getPendingSignupRequests() {
-    return apiClient.get('/admin/signup-requests').then(response => response.data);
-  },
-  approveSignupRequest(requestId) {
-    return apiClient.post(`/admin/signup-requests/${requestId}/approve`).then(response => response.data);
-  },
-  rejectSignupRequest(requestId) {
-    return apiClient.post(`/admin/signup-requests/${requestId}/reject`).then(response => response.data);
-  },
   logout() {
     localStorage.removeItem('user-token');
     localStorage.removeItem('refresh-token');
+    localStorage.removeItem('current-user');
     this.setAuthHeader(null); 
-  },
-  createSignupRequest(data) {
-    return apiClient.post('/signup-request', data).then(response => response.data);
-  },
-  checkAdmin() { //!LEGACY
-    return apiClient.get('/admin/check').then(response => response.data);
-  },
-  getMe() { //!LEGACY
-    return apiClient.get('/users/me').then(response => response.data);
   },
   getAllUsers() {
     return apiClient.get('/admin/users').then(response => response.data);
@@ -205,10 +119,72 @@ const api = {
   updateLlmSettings(settings) {
     return apiClient.put('/admin/settings/llm', settings).then(response => response.data);
   },
+  // New function to exchange Discord authorization code for app tokens
+  exchangeDiscordCode(code) {
+    return apiClient.post('/auth/discord/exchange-code', { code }).then(response => response.data);
+  }
 };
 const token = localStorage.getItem('user-token');
 if (token) {
   api.setAuthHeader(token);
 }
+
+// Axios 응답 인터셉터 추가
+apiClient.interceptors.response.use(
+  (response) => response, // 성공적인 응답은 그대로 반환
+  async (error) => {
+    const originalRequest = error.config;
+    
+    // 401 에러이고, 재시도한 요청이 아닐 경우
+    if (error.response.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true; // 재시도 플래그 설정
+
+      // /token/refresh 요청 자체에서 401이 발생하면 무한 루프를 방지하기 위해 즉시 로그아웃
+      if (originalRequest.url === '/token/refresh') {
+        api.logout();
+        router.push('/login');
+        return Promise.reject(error);
+      }
+
+      try {
+        const refreshToken = localStorage.getItem('refresh-token');
+        if (!refreshToken) {
+          throw new Error("No refresh token available");
+        }
+
+        // 새 액세스 토큰 요청
+        const response = await apiClient.post('/token/refresh', {}, {
+          headers: { 'Authorization': `Bearer ${refreshToken}` }
+        });
+
+        const { access_token, user } = response.data;
+
+        // 새 토큰과 사용자 정보를 저장
+        localStorage.setItem('user-token', access_token);
+        localStorage.setItem('current-user', JSON.stringify(user));
+        
+        // API 클라이언트의 기본 헤더 업데이트
+        api.setAuthHeader(access_token);
+        
+        // 실패했던 원래 요청의 헤더를 업데이트하여 재요청
+        originalRequest.headers['Authorization'] = `Bearer ${access_token}`;
+        return apiClient(originalRequest);
+
+      } catch (refreshError) {
+        // 리프레시 토큰이 실패하면 모든 인증 정보를 지우고 로그인 페이지로 리디렉션
+        api.logout();
+        // router.push('/login')을 사용하면 현재 실패한 API 호출의 promise가 reject되지 않아
+        // 대시보드 등에서 에러를 계속 처리하려고 할 수 있습니다.
+        // window.location을 사용해 페이지를 완전히 새로고침하여 상태를 초기화합니다.
+        window.location.href = '/login';
+        return Promise.reject(refreshError);
+      }
+    }
+    
+    // 401 에러가 아니거나 재시도 요청인 경우 에러를 그대로 반환
+    return Promise.reject(error);
+  }
+);
+
 
 export default api;

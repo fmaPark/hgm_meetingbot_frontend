@@ -9,9 +9,8 @@ const router = useRouter();
 const projects = ref([]);
 const meetings = ref([]);
 const users = ref([]);
-const signupRequests = ref([]);
+
 const isLoading = ref(false);
-const isSummarizing = ref({}); // 각 회의별 요약 진행 상태
 const pollingIntervalId = ref(null);
 
 const currentView = ref('meetings'); // 'meetings', 'requests', 'rbac_admin'
@@ -35,6 +34,12 @@ const selectedProjectForConfig = ref(null);
 const formInitialState = { name: '', drive_folder_id: '', asana_config: { project_id: '', project_field: '', project_field_id: '', drive_field_id: '' } };
 const partFormData = ref(JSON.parse(JSON.stringify(formInitialState)));
 const editingPart = ref(null);
+
+// 텍스트 변환 관련 모달 상태
+const isTranscribeModalVisible = ref(false);
+const sttModels = ref([]);
+const selectedSttModel = ref(null);
+const meetingToTranscribe = ref(null);
 
 // 요약 관련 모달 상태
 const isPromptModalVisible = ref(false);
@@ -123,9 +128,7 @@ async function loadInitialData() {
   
   const fetchPromises = [fetchProjects(), fetchMeetings()];
   
-  if (hasPermission.value('user:manage_approval')) {
-    fetchPromises.push(fetchSignupRequests());
-  }
+
   if (hasPermission.value('user:read')) {
     fetchPromises.push(fetchUsers());
   }
@@ -154,19 +157,6 @@ async function fetchMeetings() {
     console.log("Fetched meetings:", meetings.value);
   } catch (error) {
     showToast("회의 현황 로딩 실패", 'error');
-  } finally {
-    isLoading.value = false;
-  }
-}
-
-async function fetchSignupRequests() {
-  isLoading.value = true;
-  try {
-    signupRequests.value = await api.getPendingSignupRequests();
-  } catch (error) {
-    if (error.response?.status !== 403) {
-      showToast("가입 요청 목록 로딩 실패", 'error');
-    }
   } finally {
     isLoading.value = false;
   }
@@ -379,27 +369,7 @@ watch(rbacAdminTab, (newTab) => {
   }
 });
 
-async function handleApprove(requestId) {
-  if (!confirm("이 가입 요청을 승인하시겠습니까?")) return;
-  isLoading.value = true;
-  try {
-    const response = await api.approveSignupRequest(requestId);
-    showToast(response.message, 'success');
-  } catch (error) {
-    showToast(error.response?.data?.detail || "승인 처리 중 오류 발생", 'error');
-    console.error("Approval error:", error);
-    isLoading.value = false;
-    return;
-  }
 
-  try {
-    await fetchSignupRequests();
-  } catch (error) {
-    console.error("Failed to refresh signup requests after approval:", error);
-  } finally {
-    isLoading.value = false;
-  }
-}
 
 async function handleReject(requestId) {
   if (!confirm("이 가입 요청을 거절하시겠습니까?")) return;
@@ -673,6 +643,64 @@ async function handleUpdatePart() {
   }
 }
 
+async function openTranscribeModal(meeting) {
+  isLoading.value = true;
+  try {
+    sttModels.value = await api.getSttModels();
+    if (sttModels.value.length > 0) {
+      selectedSttModel.value = sttModels.value[0];
+    }
+    
+    meetingToTranscribe.value = meeting;
+    isTranscribeModalVisible.value = true;
+  } catch (error) {
+    showToast("STT 모델 목록을 불러오는 데 실패했습니다.", 'error');
+  } finally {
+    isLoading.value = false;
+    renderIcons();
+  }
+}
+
+function closeTranscribeModal() {
+  isTranscribeModalVisible.value = false;
+  sttModels.value = [];
+  selectedSttModel.value = null;
+  meetingToTranscribe.value = null;
+}
+
+async function handleConfirmTranscribe() {
+  if (!selectedSttModel.value) {
+    showToast("STT 모델을 선택해주세요.", 'error');
+    return;
+  }
+  console.log("Selected STT Model:", selectedSttModel.value);
+  // Store meetingId and meetingIndex before closing the modal
+  const meetingId = meetingToTranscribe.value.id;
+  const meetingIndex = meetings.value.findIndex(m => m.id === meetingId);
+  
+  
+  if (meetingIndex === -1) return;
+  
+  const originalStatus = meetings.value[meetingIndex].status;
+  meetings.value[meetingIndex].status = 'PROCESSING'; // Optimistic UI update
+  
+  try {
+    const payload = {
+      stt_model: selectedSttModel.value,
+    };
+    const response = await api.transcribeMeeting(meetingId, payload);
+    meetings.value[meetingIndex] = response; // Update with response from server
+    
+    showToast("텍스트 변환 작업이 시작되었습니다.", 'success');
+    startPolling();
+    closeTranscribeModal();
+  } catch (error) {
+    showToast("텍스트 변환 작업 실패", 'error');
+    meetings.value[meetingIndex].status = originalStatus; // Revert on failure
+  }
+}
+
+
 async function openPromptModal(meeting) {
   isLoading.value = true;
   try {
@@ -721,10 +749,16 @@ async function handleConfirmSummarize() {
     return;
   }
 
-  isLoading.value = true;
+  // Store meetingId and meetingIndex before closing the modal
   const meetingId = meetingToSummarize.value.id;
-  isSummarizing.value[meetingId] = true;
+  const meetingIndex = meetings.value.findIndex(m => m.id === meetingId);
+
   closePromptModal();
+
+  if (meetingIndex === -1) return;
+
+  const originalStatus = meetings.value[meetingIndex].status;
+  meetings.value[meetingIndex].status = 'PROCESSING'; // Optimistic UI update
   
   try {
     const payload = {
@@ -733,17 +767,13 @@ async function handleConfirmSummarize() {
       keywords_name: selectedKeywords.value,
     };
     const response = await api.summarizeMeeting(meetingId, payload);
-    const index = meetings.value.findIndex(m => m.id === response.id);
-    if (index !== -1) meetings.value[index] = response;
+    meetings.value[meetingIndex] = response;
     
-    showToast("요약 작업이 시작되었습니다. 완료되면 자동으로 업데이트됩니다.", 'success');
+    showToast("요약 작업이 시작되었습니다.", 'success');
     startPolling();
   } catch (error) {
     showToast("요약 작업 실패", 'error');
-    isSummarizing.value[meetingId] = false;
-  } finally {
-    isLoading.value = false;
-    renderIcons();
+    meetings.value[meetingIndex].status = originalStatus; // Revert on failure
   }
 }
 
@@ -766,7 +796,9 @@ const statusClassMap = {
   RECORDING: 'recording',
   STOPPED: 'stopped',
   PROCESSING: 'processing',
+TRANSCRIBED: 'transcribed',
   SUMMARIZED: 'summarized',
+  UPLOADED: 'uploaded',
   FAILED: 'failed',
 };
 function getStatusClass(status) {
@@ -814,6 +846,27 @@ watch(currentView, (newView, oldView) => {
       <span>{{ toast.message }}</span>
     </div>
 
+    <div class="modal-overlay" v-if="isTranscribeModalVisible" @click="closeTranscribeModal">
+      <div class="modal-content" @click.stop>
+        <header class="modal-header">
+          <h2>STT 모델 선택</h2>
+          <button class="btn-icon" @click="closeTranscribeModal"><i data-feather="x"></i></button>
+        </header>
+        <div class="prompt-select-wrapper">
+          <div class="form-group">
+            <label for="stt-model-select">STT 모델</label>
+            <select id="stt-model-select" v-model="selectedSttModel">
+              <option v-for="model in sttModels" :key="model" :value="model">{{ model }}</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-secondary" @click="closeTranscribeModal">취소</button>
+          <button class="btn-primary" @click="handleConfirmTranscribe" :disabled="!selectedSttModel">변환 실행</button>
+        </div>
+      </div>
+    </div>
+    
     <div class="modal-overlay" v-if="isPromptModalVisible" @click="closePromptModal">
       <div class="modal-content" @click.stop>
         <header class="modal-header">
@@ -1145,11 +1198,6 @@ watch(currentView, (newView, oldView) => {
             <button @click="currentView = 'meetings'" :class="{ active: currentView === 'meetings' }">
             <i data-feather="activity"></i> 회의 현황
             </button>
-            <!--  가입 요청 관리 탭 추가 -->
-            <button v-if="hasPermission('user:manage_approval')" @click="currentView = 'requests'" :class="{ active: currentView === 'requests' }">
-            <i data-feather="user-plus"></i> 가입 요청
-            <span v-if="signupRequests.length > 0" class="badge notification-badge">{{ signupRequests.length }}</span>
-            </button>
             <!-- RBAC 관리 탭 추가 -->
             <button v-if="hasPermission('rbac:manage')" @click="currentView = 'rbac_admin'; fetchRolesAndPermissions()" :class="{ active: currentView === 'rbac_admin' }">
               <i data-feather="shield"></i> RBAC 관리
@@ -1177,34 +1225,38 @@ watch(currentView, (newView, oldView) => {
                     <td>{{ meeting.author_nick }}</td>
                     <td>{{ formatDateTime(meeting.start_time) }}</td>
                     <td class="actions">
-                    <button v-if="meeting.status === 'SUMMARIZED' && meeting.artifacts.summary_paths?.length"
-                            @click="openSummarySelectModal(meeting)" class="btn-secondary"> <!-- 호출 함수 변경 -->
-                        <i data-feather="eye"></i> 보기/업로드
-                    </button>
-                    
-                    <button v-else-if="meeting.status === 'STOPPED'"
-                            :key="`summary-start-${meeting.id}`"
-                            @click="openPromptModal(meeting)" class="btn-primary" :disabled="isSummarizing[meeting.id]">
-                        <i v-if="!isSummarizing[meeting.id]" data-feather="play-circle"></i>
-                        <span v-if="isSummarizing[meeting.id]" class="loader"></span>
-                        <span v-else>요약하기</span>
-                    </button>
+                      <button v-if="(meeting.status === 'SUMMARIZED' || meeting.status === 'UPLOADED') && meeting.artifacts.summary_paths?.length"
+                              @click="openSummarySelectModal(meeting)" class="btn-secondary">
+                          <i data-feather="eye"></i> 보기/업로드
+                      </button>
+                      
+                      <button v-else-if="meeting.status === 'STOPPED'"
+                              @click="openTranscribeModal(meeting)" class="btn-primary">
+                          <i data-feather="type"></i>
+                          <span>텍스트로 변환</span>
+                      </button>
 
-                    <div v-else-if="meeting.status === 'PROCESSING'" 
-                        :key="`summary-processing-${meeting.id}`"
-                        class="status-processing">
-                        <span class="loader-small"></span>
-                        <span>처리 중...</span>
-                    </div>
+                      <button v-else-if="meeting.status === 'TRANSCRIBED'"
+                              @click="openPromptModal(meeting)" class="btn-primary">
+                          <i data-feather="play-circle"></i>
+                          <span>요약하기</span>
+                      </button>
 
-                    <div v-else-if="meeting.status === 'FAILED'" 
-                        :key="`summary-failed-${meeting.id}`"
-                        class="status-failed">
-                        <i data-feather="alert-circle"></i>
-                        <span>실패</span>
-                    </div>
+                      <div v-else-if="meeting.status === 'PROCESSING'" 
+                          :key="`processing-${meeting.id}`"
+                          class="status-processing">
+                          <span class="loader-small"></span>
+                          <span>처리 중...</span>
+                      </div>
 
-                    <span v-else :key="`summary-none-${meeting.id}`">—</span>
+                      <div v-else-if="meeting.status === 'FAILED'" 
+                          :key="`failed-${meeting.id}`"
+                          class="status-failed">
+                          <i data-feather="alert-circle"></i>
+                          <span>실패</span>
+                      </div>
+
+                      <span v-else :key="`none-${meeting.id}`">—</span>
                     </td>
                 </tr>
                 </tbody>
@@ -1213,38 +1265,7 @@ watch(currentView, (newView, oldView) => {
             <p v-else class="empty-state">해당 조건의 회의 기록이 없습니다.</p>
             </section>
         </div>
-        <div v-if="currentView === 'requests'">
-            <section class="card">
-            <h2><i data-feather="user-plus"></i> 보류 중인 가입 요청</h2>
-            <table v-if="signupRequests.length > 0" key="requests-table">
-                <thead>
-                    <tr>
-                    <th>사용자 이름</th>
-                    <th>요청 시간</th>
-                    <th class="actions">액션</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-for="req in signupRequests" :key="req.id">
-                    <td>{{ req.username }}</td>
-                    <td>{{ formatDateTime(req.requested_at) }}</td>
-                    <td class="actions">
-                        <div class="action-buttons">
-                        <button class="btn-danger" @click="handleReject(req.id)" :disabled="isLoading">
-                            <i data-feather="x-circle"></i> 거절
-                        </button>
-                        <button class="btn-success" @click="handleApprove(req.id)" :disabled="isLoading">
-                            <i data-feather="check-circle"></i> 승인
-                        </button>
-                        </div>
-                    </td>
-                    </tr>
-                </tbody>
-            </table>
-            <p v-else-if="isLoading" class="empty-state">데이터를 불러오는 중...</p>
-            <p v-else class="empty-state">대기 중인 가입 요청이 없습니다.</p>
-            </section>
-        </div>
+
         <!-- RBAC 관리 섹션 시작 -->
         <div v-if="currentView === 'rbac_admin'">
           <section class="card rbac-admin-section">
@@ -1254,7 +1275,7 @@ watch(currentView, (newView, oldView) => {
                 <button :class="{ active: rbacAdminTab === 'roles' }" @click="rbacAdminTab = 'roles'">
                   <i data-feather="users"></i> 역할 관리
                 </button>
-                <button :class="{ active: rbacAdminTab === 'permissions' }" @click="rbacAdminTab = 'permissions'">
+                <button :class="{ active: currentPermissionTab === 'permissions' }" @click="rbacAdminTab = 'permissions'">
                   <i data-feather="key"></i> 권한 관리
                 </button>
             </div>
@@ -1334,6 +1355,8 @@ watch(currentView, (newView, oldView) => {
               </div>
             </div>
           </section>
+
+
         </div>
         <!-- RBAC 관리 섹션 종료 -->
       </main>
@@ -1473,8 +1496,8 @@ hr { border: none; border-top: 1px solid var(--border-color); margin: 1.5rem 0; 
 .modal-actions { display: flex; justify-content: flex-end; gap: 1rem; padding: 1.5rem 2rem; border-top: 1px solid var(--border-color); background-color: var(--hover-bg-color); }
 .prompt-select-wrapper { margin: 1.5rem; display: flex; flex-direction: column; gap: 0.75rem; }
 .prompt-select-wrapper label { font-weight: 600; color: var(--text-color-light); }
-select.prompt-select { width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 6px; background-color: white; font-family: var(--font-family); font-size: 1rem; cursor: pointer; }
-select.prompt-select:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2); }
+select { width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 6px; background-color: white; font-family: var(--font-family); font-size: 1rem; cursor: pointer; }
+select:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2); }
 
 /* Settings Modal Specifics */
 .settings-modal { width: 90%; max-width: 1200px; max-height: 90vh; }
@@ -1582,7 +1605,9 @@ select.prompt-select:focus { outline: none; border-color: var(--primary-color); 
 .status-badge.recording { background-color: #e74c3c; } /* Red */
 .status-badge.stopped { background-color: #f39c12; } /* Orange */
 .status-badge.processing { background-color: #3498db; } /* Blue */
+.status-badge.transcribed { background-color: #3498db; } /* Blue */
 .status-badge.summarized { background-color: #2ecc71; } /* Green */
+.status-badge.uploaded { background-color: var(--success-color); }
 .status-badge.failed { background-color: #34495e; } /* Dark Gray */
 .status-processing, .status-failed {
   display: flex;
@@ -1978,62 +2003,5 @@ td.actions .action-buttons {
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem;
-  margin-top: 0.5rem;
-}
-
-.permission-tag {
-  background-color: var(--active-bg-color);
-  color: var(--text-color-light);
-  font-size: 0.75em;
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
-}
-.rbac-list li.active .permission-tag {
-    background-color: #ffffff33;
-    color: white;
-}
-
-.rbac-main section h3 {
-  margin-top: 0;
-  margin-bottom: 1.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-.rbac-main section h4 {
-  margin-top: 1.5rem;
-  margin-bottom: 1rem;
-  border-bottom: 1px solid var(--border-color);
-  padding-bottom: 0.5rem;
-  font-size: 1rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.permission-list-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 0.75rem;
-}
-
-.permission-item-grid {
-  background-color: var(--hover-bg-color);
-  padding: 0.75rem 1rem;
-  border-radius: 6px;
-}
-
-.permission-item-grid label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  font-weight: 500;
-}
-
-.permission-item-grid input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--primary-color);
 }
 </style>

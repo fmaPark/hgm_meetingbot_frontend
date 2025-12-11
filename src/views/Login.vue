@@ -5,22 +5,14 @@
         <i data-feather="lock"></i>
         <h1>관리자 로그인</h1>
       </header>
-      <form @submit.prevent="handleLogin">
-        <div class="form-group">
-          <label for="username">사용자 이름</label>
-          <input id="username" v-model="username" type="text" placeholder="Username" required>
-        </div>
-        <div class="form-group">
-          <label for="password">비밀번호</label>
-          <input id="password" v-model="password" type="password" placeholder="Password" required>
-        </div>
-        <button type="submit" class="btn-primary" :disabled="isLoading">
-          <span v-if="!isLoading">로그인</span>
-          <span v-else class="loader"></span>
+      <div v-if="errorMessage" class="error-message">
+        {{ errorMessage }}
+      </div>
+      <div class="discord-login-section">
+        <button @click="redirectToDiscord" class="btn-discord">
+          <i class="fab fa-discord"></i> <!-- Font Awesome 아이콘 사용 예시 -->
+          디스코드로 로그인
         </button>
-      </form>
-      <div class="extra-links">
-        <router-link to="/signup-request">가입 요청하기</router-link>
       </div>
     </div>
   </div>
@@ -28,35 +20,60 @@
 
 <script setup>
 import { ref, onMounted, nextTick } from 'vue';
-import { useRouter } from 'vue-router';
-import api from '../api.js'; 
+import { useRoute } from 'vue-router';
 
-const username = ref('');
-const password = ref('');
-const isLoading = ref(false);
-const router = useRouter();
+// Vue composables should be called at the top level of the setup script.
+const route = useRoute();
+const errorMessage = ref('');
 
 onMounted(() => {
   nextTick(() => {
     // @ts-ignore
     if(window.feather) feather.replace();
   });
+
+  // Check for error messages from backend redirect
+  if (route.query.error) {
+    const error = route.query.error;
+    switch (error) {
+      case 'discord_token_fail':
+        errorMessage.value = 'Discord 인증 토큰 획득에 실패했습니다. 다시 시도해주세요.';
+        break;
+      case 'no_discord_token':
+        errorMessage.value = 'Discord 인증이 완료되지 않았습니다. 다시 시도해주세요.';
+        break;
+      case 'discord_user_fail':
+        errorMessage.value = 'Discord 사용자 정보를 가져오는 데 실패했습니다.';
+        break;
+      case 'no_discord_id':
+        errorMessage.value = 'Discord 사용자 ID를 찾을 수 없습니다.';
+        break;
+      case 'user_creation_fail':
+        errorMessage.value = '사용자 생성 또는 업데이트에 실패했습니다.';
+        break;
+      case 'discord_exchange_failed':
+        errorMessage.value = 'Discord 코드 교환에 실패했습니다. 다시 시도해주세요.';
+        break;
+      case 'no_discord_code':
+        errorMessage.value = 'Discord 인증 코드를 받지 못했습니다. 다시 시도해주세요.';
+        break;
+      default:
+        errorMessage.value = '알 수 없는 로그인 오류가 발생했습니다.';
+        break;
+    }
+  }
 });
 
-async function handleLogin() {
-  isLoading.value = true;
-  try {
-    const loginResponse = await api.login(username.value, password.value);
-    localStorage.setItem('user-token', loginResponse.access_token);
-    // Store the full user object including permissions
-    localStorage.setItem('current-user', JSON.stringify(loginResponse.user));
-    api.setAuthHeader(loginResponse.access_token);
-    router.push('/'); // 로그인 성공 시 대시보드로 이동
-  } catch (error) {
-    alert("로그인 실패: 사용자 이름 또는 비밀번호를 확인하세요.");
-  } finally {
-    isLoading.value = false;
+function redirectToDiscord() {
+  const redirectPath = route.query.redirect;
+  
+  if (redirectPath) {
+    // Save the path to redirect to after successful login
+    localStorage.setItem('redirectPath', redirectPath);
   }
+
+  // Redirect to the backend's Discord login endpoint
+  window.location.href = '/api/login/discord';
 }
 </script>
 
@@ -78,10 +95,10 @@ async function handleLogin() {
   padding: 2.5rem;
   border-radius: var(--border-radius, 8px);
   box-shadow: var(--shadow, 0 4px 6px rgba(0,0,0,0.05));
+  text-align: center; /* 내부 요소들을 중앙 정렬 */
 }
 
 .login-box header {
-  text-align: center;
   margin-bottom: 2.5rem;
   color: var(--text-color, #333);
 }
@@ -98,81 +115,47 @@ async function handleLogin() {
   margin: 0;
 }
 
-.form-group {
+.error-message {
+  color: #e74c3c;
+  background-color: #fdd;
+  border: 1px solid #e74c3c;
+  padding: 0.75rem;
+  margin-bottom: 1.5rem;
+  border-radius: 6px;
+  text-align: left;
+}
+
+.discord-login-section {
   margin-bottom: 1.5rem;
 }
 
-label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 600;
-  color: var(--text-color, #333);
-}
-
-/* <<-- 핵심 수정 부분 시작 -->> */
-
-/* input과 button에 공통 스타일 적용 */
-.login-box input[type="text"],
-.login-box input[type="password"],
-.login-box button {
-  width: 100%; /* 너비를 100%로 설정하여 부모 요소를 꽉 채움 */
-  box-sizing: border-box; /* padding과 border가 너비에 포함되도록 함 */
-  padding: 0.8rem 1rem;
+.btn-discord {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.8rem 1.5rem;
   font-size: 1rem;
-  border-radius: 6px;
-}
-
-/* input 전용 스타일 */
-.login-box input[type="text"],
-.login-box input[type="password"] {
-  border: 1px solid var(--border-color, #dee2e6);
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.login-box input:focus {
-  outline: none;
-  border-color: var(--primary-color, #3498db);
-  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
-}
-
-/* button 전용 스타일 */
-.login-box button {
-  border: none;
-  margin-top: 1rem; /* 버튼 위에 추가 간격 */
-  background-color: var(--primary-color, #3498db);
-  color: white;
   font-weight: 600;
+  border-radius: 6px;
+  border: none;
+  background-color: #5865F2; /* Discord 브랜드 색상 */
+  color: white;
   cursor: pointer;
-}
-
-.login-box button:hover:not(:disabled) {
-  background-color: var(--primary-color-dark, #2980b9);
-}
-
-.login-box button:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-/* <<-- 핵심 수정 부분 끝 -->> */
-
-/* 로더 스타일 */
-.loader {
-  width: 18px;
-  height: 18px;
-  border: 2px solid #FFF;
-  border-bottom-color: transparent;
-  border-radius: 50%;
-  display: inline-block;
+  transition: background-color 0.2s;
+  width: 100%;
   box-sizing: border-box;
-  animation: rotation 1s linear infinite;
 }
-@keyframes rotation {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+
+.btn-discord:hover {
+  background-color: #4752C4;
 }
+
+.btn-discord .fab {
+  margin-right: 0.75rem;
+  font-size: 1.2em;
+}
+
 .extra-links {
-  text-align: center;
   margin-top: 1.5rem;
 }
 </style>

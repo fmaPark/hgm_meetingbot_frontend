@@ -2,18 +2,16 @@ import { createRouter, createWebHistory } from 'vue-router';
 // 컴포넌트 경로 수정
 import Dashboard from './views/Dashboard.vue'; 
 import Login from './views/Login.vue';
-import SignupRequest from './views/SignupRequest.vue';
 import PromptsAndKeywords from './views/PromptsAndKeywords.vue';
 import LLMSettings from './views/LLMSettings.vue';
-// import Permissions from './views/Permissions.vue';
+import AuthCallback from './views/AuthCallback.vue'; // 콜백 컴포넌트 임포트
 
 const routes = [
   { path: '/', name: 'Dashboard', component: Dashboard },
   { path: '/login', name: 'Login', component: Login },
-  { path: '/signup-request', name: 'SignupRequest', component: SignupRequest },
+  { path: '/auth/callback', name: 'AuthCallback', component: AuthCallback }, // 콜백 라우트 추가
   { path: '/prompts-and-keywords', name: 'PromptsAndKeywords', component: PromptsAndKeywords },
   { path: '/admin/llm-settings', name: 'LLMSettings', component: LLMSettings },
-  // { path: '/permissions', name: 'Permissions', component: Permissions },
 ];
 
 const router = createRouter({
@@ -23,12 +21,13 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('user-token');
-  // 로그인 페이지로 가려는 경우가 아니고, 토큰이 없으면 로그인 페이지로 리다이렉트
-  const publicPages = ['Login', 'SignupRequest'];
+  // 로그인 페이지, 가입 요청 페이지, 인증 콜백 페이지는 토큰 없이 접근 가능
+  const publicPages = ['Login', 'AuthCallback'];
   const authRequired = !publicPages.includes(to.name);
   
   if (authRequired && !token) {
-    return next({ name: 'Login' });
+    // 사용자가 가려던 경로를 쿼리로 추가하여 로그인 페이지로 리디렉션
+    return next({ name: 'Login', query: { redirect: to.fullPath } });
   }
   next();
 });
