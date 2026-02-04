@@ -753,6 +753,11 @@ async function handleConfirmSummarize() {
   const meetingId = meetingToSummarize.value.id;
   const meetingIndex = meetings.value.findIndex(m => m.id === meetingId);
 
+  const payload = {
+    model: selectedModel.value,
+    instruction_name: selectedPrompt.value,
+    keywords_name: selectedKeywords.value,
+  };
   closePromptModal();
 
   if (meetingIndex === -1) return;
@@ -761,11 +766,6 @@ async function handleConfirmSummarize() {
   meetings.value[meetingIndex].status = 'PROCESSING'; // Optimistic UI update
   
   try {
-    const payload = {
-      model: selectedModel.value,
-      instruction_name: selectedPrompt.value,
-      keywords_name: selectedKeywords.value,
-    };
     const response = await api.summarizeMeeting(meetingId, payload);
     meetings.value[meetingIndex] = response;
     
