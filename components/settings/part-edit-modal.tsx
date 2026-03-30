@@ -22,7 +22,7 @@ interface PartEditModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   part: Part | null // null = add mode
-  onSave: (data: { name: string; driveId: string }) => void
+  onSave: (data: { name: string; drive_folder_id: string }) => void
 }
 
 export function PartEditModal({
@@ -33,21 +33,21 @@ export function PartEditModal({
 }: PartEditModalProps) {
   const isEdit = part !== null
   const [name, setName] = useState("")
-  const [driveId, setDriveId] = useState("")
+  const [driveFolderId, setDriveFolderId] = useState("")
 
   // Reset form on open
   useEffect(() => {
     if (open) {
       setName(part?.name ?? "")
-      setDriveId(part?.driveId ?? "")
+      setDriveFolderId(part?.drive_folder_id ?? "")
     }
   }, [open, part])
 
-  const canSave = name.trim() !== "" && driveId.trim() !== ""
+  const canSave = name.trim() !== "" && driveFolderId.trim() !== ""
 
   function handleSave() {
     if (!canSave) return
-    onSave({ name: name.trim(), driveId: driveId.trim() })
+    onSave({ name: name.trim(), drive_folder_id: driveFolderId.trim() })
   }
 
   return (
@@ -111,8 +111,8 @@ export function PartEditModal({
             </div>
             <Input
               id="drive-id"
-              value={driveId}
-              onChange={(e) => setDriveId(e.target.value)}
+              value={driveFolderId}
+              onChange={(e) => setDriveFolderId(e.target.value)}
               placeholder="폴더 ID를 입력하세요"
               onKeyDown={(e) => {
                 if (e.key === "Enter") {

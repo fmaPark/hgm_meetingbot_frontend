@@ -20,38 +20,43 @@ import {
 } from "@/components/ui/select"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { EmptyState } from "@/components/empty-state"
-import type {
-  Prompt,
-  PromptItem,
-  PromptItemType,
-} from "@/lib/prompt-keyword-types"
+import {
+  usePrompts,
+  useCreatePrompt,
+  useUpdatePrompt,
+  useDeletePrompt,
+} from "@/lib/hooks/use-prompts"
+import type { PromptItemType } from "@/lib/prompt-keyword-types"
 import {
   PROMPT_TYPE_LABELS,
   PROMPT_TYPE_DESCRIPTIONS,
 } from "@/lib/prompt-keyword-types"
+import type { PromptType, PromptTuple } from "@/lib/api/types"
 
-interface PromptManagementPanelProps {
-  prompts: Prompt[]
-  onPromptsChange: (prompts: Prompt[]) => void
-  loading?: boolean
+/** Local editing item with generated id */
+interface EditItem {
+  id: number
+  type: PromptItemType
+  content: string
 }
 
-export function PromptManagementPanel({
-  prompts,
-  onPromptsChange,
-  loading = false,
-}: PromptManagementPanelProps) {
+export function PromptManagementPanel() {
+  const { data: promptsData = [], isLoading: loading } = usePrompts()
+  const createMutation = useCreatePrompt()
+  const updateMutation = useUpdatePrompt()
+  const deleteMutation = useDeletePrompt()
+
   const [selectedId, setSelectedId] = useState<number | null>(null)
 
   // Editing state (local copy)
   const [editName, setEditName] = useState("")
   const [editIsGlobal, setEditIsGlobal] = useState(false)
-  const [editItems, setEditItems] = useState<PromptItem[]>([])
+  const [editItems, setEditItems] = useState<EditItem[]>([])
   const [isDirty, setIsDirty] = useState(false)
+  const [isNew, setIsNew] = useState(false)
 
   // Delete dialog
-  const [deleteTarget, setDeleteTarget] = useState<Prompt | null>(null)
-  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null)
 
   // Unsaved changes dialog
   const [pendingSelectId, setPendingSelectId] = useState<number | null>(null)
@@ -59,22 +64,45 @@ export function PromptManagementPanel({
 
   const nextItemId = useRef(1000)
 
-  // Sorted: isGlobal first, then by createdAt ascending
-  const sortedPrompts = [...prompts].sort((a, b) => {
-    if (a.isGlobal !== b.isGlobal) return a.isGlobal ? -1 : 1
-    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  // Sorted: isGlobal first, then by id ascending
+  const sortedPrompts = [...promptsData].sort((a, b) => {
+    if (a.is_global !== b.is_global) return a.is_global ? -1 : 1
+    return a.id - b.id
   })
 
-  const selectedPrompt = prompts.find((p) => p.id === selectedId) ?? null
+  const selectedPrompt = promptsData.find((p) => p.id === selectedId) ?? null
+
+  // Map API PromptTuple[] → local EditItem[]
+  function tuplesToItems(tuples: PromptTuple[]): EditItem[] {
+    return tuples.map((t) => ({
+      id: nextItemId.current++,
+      type: t.type as PromptItemType,
+      content: t.prompt_text,
+    }))
+  }
+
+  // Map local EditItem[] → API PromptTuple[]
+  function itemsToTuples(items: EditItem[]): PromptTuple[] {
+    return items.map((item) => ({
+      type: item.type as PromptType,
+      prompt_text: item.content,
+    }))
+  }
 
   // Load a prompt into editing state
-  const loadPrompt = useCallback((prompt: Prompt) => {
-    setSelectedId(prompt.id)
-    setEditName(prompt.name)
-    setEditIsGlobal(prompt.isGlobal)
-    setEditItems(prompt.items.map((item) => ({ ...item })))
-    setIsDirty(false)
-  }, [])
+  const loadPrompt = useCallback(
+    (promptId: number) => {
+      const prompt = promptsData.find((p) => p.id === promptId)
+      if (!prompt) return
+      setSelectedId(prompt.id)
+      setEditName(prompt.name)
+      setEditIsGlobal(prompt.is_global)
+      setEditItems(tuplesToItems(prompt.prompts))
+      setIsDirty(false)
+      setIsNew(false)
+    },
+    [promptsData] // eslint-disable-line react-hooks/exhaustive-deps
+  )
 
   const handleSelect = useCallback(
     (id: number) => {
@@ -84,101 +112,110 @@ export function PromptManagementPanel({
         setUnsavedDialogOpen(true)
         return
       }
-      const prompt = prompts.find((p) => p.id === id)
-      if (prompt) loadPrompt(prompt)
+      loadPrompt(id)
     },
-    [selectedId, isDirty, prompts, loadPrompt]
+    [selectedId, isDirty, loadPrompt]
   )
 
   const handleUnsavedDiscard = useCallback(() => {
     setUnsavedDialogOpen(false)
-    if (pendingSelectId !== null) {
-      const prompt = prompts.find((p) => p.id === pendingSelectId)
-      if (prompt) loadPrompt(prompt)
+    if (pendingSelectId !== null && pendingSelectId !== -1) {
+      loadPrompt(pendingSelectId)
     }
     setPendingSelectId(null)
-  }, [pendingSelectId, prompts, loadPrompt])
+  }, [pendingSelectId, loadPrompt])
+
+  const doStartNew = useCallback(() => {
+    setSelectedId(null)
+    setEditName("")
+    setEditIsGlobal(false)
+    setEditItems([{ id: nextItemId.current++, type: "system", content: "" }])
+    setIsDirty(true)
+    setIsNew(true)
+  }, [])
 
   const handleAdd = useCallback(() => {
     if (isDirty) {
-      setPendingSelectId(-1) // special marker for "add new"
+      setPendingSelectId(-1)
       setUnsavedDialogOpen(true)
       return
     }
-    doAdd()
+    doStartNew()
+  }, [isDirty, doStartNew])
 
-    function doAdd() {
-      const id = Date.now()
-      const newPrompt: Prompt = {
-        id,
-        name: "",
-        isGlobal: false,
-        createdAt: new Date().toISOString(),
-        items: [{ id: nextItemId.current++, type: "system", content: "" }],
-      }
-      onPromptsChange([...prompts, newPrompt])
-      loadPrompt(newPrompt)
-      setIsDirty(true)
-    }
-  }, [isDirty, prompts, onPromptsChange, loadPrompt])
-
-  // For unsaved discard when pendingSelectId === -1 (add new)
   const handleUnsavedDiscardForAdd = useCallback(() => {
     setUnsavedDialogOpen(false)
     setPendingSelectId(null)
-    const id = Date.now()
-    const newPrompt: Prompt = {
-      id,
-      name: "",
-      isGlobal: false,
-      createdAt: new Date().toISOString(),
-      items: [{ id: nextItemId.current++, type: "system", content: "" }],
-    }
-    onPromptsChange([...prompts, newPrompt])
-    loadPrompt(newPrompt)
-    setIsDirty(true)
-  }, [prompts, onPromptsChange, loadPrompt])
+    doStartNew()
+  }, [doStartNew])
 
   const handleSave = useCallback(() => {
     if (!editName.trim()) {
       toast.error("프롬프트명을 입력해주세요.")
       return
     }
-    const updated = prompts.map((p) =>
-      p.id === selectedId
-        ? { ...p, name: editName.trim(), isGlobal: editIsGlobal, items: editItems }
-        : p
-    )
-    onPromptsChange(updated)
-    setIsDirty(false)
-    toast.success("저장 완료")
-  }, [prompts, selectedId, editName, editIsGlobal, editItems, onPromptsChange])
+
+    const payload = {
+      name: editName.trim(),
+      is_global: editIsGlobal,
+      prompts: itemsToTuples(editItems),
+    }
+
+    if (isNew) {
+      createMutation.mutate(payload, {
+        onSuccess: (created) => {
+          setIsDirty(false)
+          setIsNew(false)
+          setSelectedId(created.id)
+          toast.success("프롬프트 생성 완료")
+        },
+        onError: () => toast.error("프롬프트 생성 실패"),
+      })
+    } else if (selectedId !== null) {
+      updateMutation.mutate(
+        { promptId: selectedId, data: payload },
+        {
+          onSuccess: () => {
+            setIsDirty(false)
+            toast.success("저장 완료")
+          },
+          onError: () => toast.error("저장 실패"),
+        }
+      )
+    }
+  }, [editName, editIsGlobal, editItems, isNew, selectedId, createMutation, updateMutation])
 
   const handleCancel = useCallback(() => {
-    if (selectedPrompt) {
-      loadPrompt(selectedPrompt)
+    if (isNew) {
+      setSelectedId(null)
+      setIsDirty(false)
+      setIsNew(false)
+      return
     }
-  }, [selectedPrompt, loadPrompt])
+    if (selectedId !== null) {
+      loadPrompt(selectedId)
+    }
+  }, [isNew, selectedId, loadPrompt])
 
   const handleDeleteRequest = useCallback(() => {
-    if (selectedPrompt) setDeleteTarget(selectedPrompt)
-  }, [selectedPrompt])
+    if (selectedId !== null) setDeleteTargetId(selectedId)
+  }, [selectedId])
 
   const handleDeleteConfirm = useCallback(() => {
-    if (!deleteTarget) return
-    setDeleteLoading(true)
-    setTimeout(() => {
-      const updated = prompts.filter((p) => p.id !== deleteTarget.id)
-      onPromptsChange(updated)
-      if (selectedId === deleteTarget.id) {
-        setSelectedId(null)
-        setIsDirty(false)
-      }
-      setDeleteTarget(null)
-      setDeleteLoading(false)
-      toast.success("삭제 완료")
-    }, 400)
-  }, [deleteTarget, prompts, selectedId, onPromptsChange])
+    if (deleteTargetId === null) return
+    deleteMutation.mutate(deleteTargetId, {
+      onSuccess: () => {
+        if (selectedId === deleteTargetId) {
+          setSelectedId(null)
+          setIsDirty(false)
+          setIsNew(false)
+        }
+        setDeleteTargetId(null)
+        toast.success("삭제 완료")
+      },
+      onError: () => toast.error("삭제 실패"),
+    })
+  }, [deleteTargetId, selectedId, deleteMutation])
 
   // Prompt item handlers
   const handleAddItem = useCallback(() => {
@@ -218,6 +255,12 @@ export function PromptManagementPanel({
     []
   )
 
+  const deleteTargetName = deleteTargetId !== null
+    ? promptsData.find((p) => p.id === deleteTargetId)?.name ?? "프롬프트"
+    : "프롬프트"
+
+  const showEditor = selectedId !== null || isNew
+
   // ─── Loading skeleton ───────────────────────────
   if (loading) {
     return (
@@ -236,7 +279,7 @@ export function PromptManagementPanel({
   }
 
   // ─── Empty state ───────────────────────────
-  if (prompts.length === 0) {
+  if (promptsData.length === 0 && !isNew) {
     return (
       <div className="flex flex-col">
         <div className="flex items-center justify-between border-b border-border p-4">
@@ -282,7 +325,7 @@ export function PromptManagementPanel({
               )}
             >
               <span className="flex-1 truncate">{prompt.name || "새 프롬프트"}</span>
-              {prompt.isGlobal && (
+              {prompt.is_global && (
                 <Badge
                   variant="secondary"
                   className="shrink-0 bg-blue-100 text-blue-800"
@@ -296,7 +339,7 @@ export function PromptManagementPanel({
       </div>
 
       {/* Edit Area */}
-      {selectedId !== null ? (
+      {showEditor ? (
         <>
           <Separator />
           <div className="flex flex-col gap-4 p-4">
@@ -404,18 +447,25 @@ export function PromptManagementPanel({
 
             {/* Footer */}
             <div className="flex items-center justify-between pt-2">
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={handleDeleteRequest}
-              >
-                삭제
-              </Button>
+              {!isNew && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleDeleteRequest}
+                >
+                  삭제
+                </Button>
+              )}
+              {isNew && <div />}
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={handleCancel}>
                   취소
                 </Button>
-                <Button size="sm" onClick={handleSave}>
+                <Button
+                  size="sm"
+                  onClick={handleSave}
+                  disabled={createMutation.isPending || updateMutation.isPending}
+                >
                   저장
                 </Button>
               </div>
@@ -435,18 +485,18 @@ export function PromptManagementPanel({
 
       {/* Delete Confirmation */}
       <ConfirmDialog
-        open={deleteTarget !== null}
+        open={deleteTargetId !== null}
         onOpenChange={(open) => {
-          if (!open) setDeleteTarget(null)
+          if (!open) setDeleteTargetId(null)
         }}
         title="프롬프트 삭제"
-        description={`${deleteTarget?.name || "프롬프트"}을(를) 삭제하시겠습니까?`}
+        description={`${deleteTargetName}을(를) 삭제하시겠습니까?`}
         confirmText="삭제"
         cancelText="취소"
         variant="destructive"
-        loading={deleteLoading}
+        loading={deleteMutation.isPending}
         onConfirm={handleDeleteConfirm}
-        onCancel={() => setDeleteTarget(null)}
+        onCancel={() => setDeleteTargetId(null)}
       />
 
       {/* Unsaved Changes Dialog */}

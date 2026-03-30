@@ -4,12 +4,12 @@ import { Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import type { Role } from "@/lib/rbac-types"
+import type { RoleWithPermissions } from "@/lib/api/types"
 
 interface RoleListPanelProps {
-  roles: Role[]
+  roles: RoleWithPermissions[]
   selectedId: number | null
-  onSelect: (role: Role) => void
+  onSelect: (role: RoleWithPermissions) => void
   onAddNew: () => void
   loading: boolean
   /** Whether a new (unsaved) role is being created */
@@ -89,7 +89,7 @@ export function RoleListPanel({
                   {role.name}
                 </p>
                 <p className="mt-0.5 line-clamp-1 text-xs text-text-secondary">
-                  {role.description || "설명 없음"}
+                  {role.permissions.length}개 권한
                 </p>
               </button>
             )

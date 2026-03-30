@@ -2,12 +2,12 @@
 
 import { cn } from "@/lib/utils"
 import { Checkbox } from "@/components/ui/checkbox"
-import type { UserRole } from "@/lib/admin-types"
-import { AVAILABLE_ROLES } from "@/lib/admin-types"
+import { Skeleton } from "@/components/ui/skeleton"
+import { useRoles } from "@/lib/hooks/use-admin"
 
 interface RoleManagementTabProps {
-  selectedRoles: UserRole[]
-  onRolesChange: (roles: UserRole[]) => void
+  selectedRoles: string[]
+  onRolesChange: (roles: string[]) => void
   showError: boolean
 }
 
@@ -16,12 +16,24 @@ export function RoleManagementTab({
   onRolesChange,
   showError,
 }: RoleManagementTabProps) {
-  function handleToggle(roleName: UserRole) {
+  const { data: rolesData = [], isLoading } = useRoles()
+
+  function handleToggle(roleName: string) {
     if (selectedRoles.includes(roleName)) {
       onRolesChange(selectedRoles.filter((r) => r !== roleName))
     } else {
       onRolesChange([...selectedRoles, roleName])
     }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-2">
+        {[1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-14 w-full rounded-lg" />
+        ))}
+      </div>
+    )
   }
 
   return (
@@ -39,7 +51,7 @@ export function RoleManagementTab({
       )}
 
       <div className="flex flex-col gap-2">
-        {AVAILABLE_ROLES.map((role) => {
+        {rolesData.map((role) => {
           const isChecked = selectedRoles.includes(role.name)
 
           return (
@@ -54,14 +66,14 @@ export function RoleManagementTab({
                 checked={isChecked}
                 onCheckedChange={() => handleToggle(role.name)}
                 className="mt-0.5"
-                aria-label={role.label}
+                aria-label={role.name}
               />
               <div className="flex flex-col gap-0.5">
                 <span className="text-sm font-medium text-foreground">
-                  {role.label}
+                  {role.name}
                 </span>
                 <span className="text-xs text-text-secondary">
-                  {role.description}
+                  {role.permissions.length}개 권한
                 </span>
               </div>
             </label>

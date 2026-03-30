@@ -6,13 +6,14 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatusBadge } from "@/components/status-badge"
 import type { DeletedMeeting } from "@/lib/meeting-types"
-
-type DisplayDeletedMeeting = DeletedMeeting & { _fading?: boolean }
 import {
+  formatRelativeDate,
   formatDeletedRelative,
   isViewable,
   isClickable,
 } from "@/lib/meeting-types"
+
+type DisplayDeletedMeeting = DeletedMeeting & { _fading?: boolean }
 
 interface TrashCardListProps {
   meetings: DisplayDeletedMeeting[]
@@ -52,20 +53,21 @@ export function TrashCardList({
           {/* Top: Date + Deleted relative + Status Badge */}
           <div className="flex items-center justify-between">
             <span className="text-xs text-text-secondary">
-              {meeting.date} · (삭제: {formatDeletedRelative(meeting.deletedAt)})
+              {formatRelativeDate(meeting.start_time)}
+              {meeting.deleted_at && ` · (삭제: ${formatDeletedRelative(meeting.deleted_at)})`}
             </span>
             <StatusBadge status={meeting.status} />
           </div>
 
-          {/* Middle: Title */}
+          {/* Middle: Project / Part */}
           <h3 className="mt-2 line-clamp-2 font-semibold text-foreground">
-            {meeting.title}
+            {meeting.project} / {meeting.part}
           </h3>
 
           {/* Bottom: Info + Actions */}
           <div className="mt-2 flex items-center justify-between">
             <span className="text-xs text-text-secondary">
-              {meeting.project}/{meeting.part} · {meeting.host}
+              {meeting.author_nick}
             </span>
 
             <div

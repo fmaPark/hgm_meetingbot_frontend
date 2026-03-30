@@ -1,12 +1,13 @@
-import type { MeetingStatus } from "@/components/status-badge"
+import type { MeetingStatus } from "@/lib/api/types"
 
+// UI-facing types for SttStep / AiSummaryStep subcomponents
 export interface SttModel {
-  id: number
+  id: string
   name: string
 }
 
 export interface LlmModel {
-  id: number
+  id: string
   name: string
 }
 
@@ -21,40 +22,6 @@ export interface KeywordSet {
   id: number
   name: string
 }
-
-export const SAMPLE_STT_MODELS: SttModel[] = [
-  { id: 1, name: "Whisper Large" },
-  { id: 2, name: "Whisper Medium" },
-]
-
-export const SAMPLE_LLM_MODELS: LlmModel[] = [
-  { id: 1, name: "GPT-4" },
-  { id: 2, name: "GPT-3.5-turbo" },
-  { id: 3, name: "Gemini Pro" },
-]
-
-export const SAMPLE_PROMPTS: PromptPreset[] = [
-  {
-    id: 1,
-    name: "기본 요약 프롬프트",
-    content:
-      "다음 회의 내용을 요약해주세요. 주요 논의사항, 결정사항, 액션아이템을 구분하여 정리해주세요.",
-    isGlobal: true,
-  },
-  {
-    id: 2,
-    name: "상세 요약",
-    content:
-      "다음 회의 내용을 상세하게 요약해주세요. 각 발언자의 주요 발언, 논의 흐름, 결론을 포함해주세요.",
-    isGlobal: false,
-  },
-]
-
-export const SAMPLE_KEYWORDS: KeywordSet[] = [
-  { id: 0, name: "선택 안 함" },
-  { id: 1, name: "기본 키워드" },
-  { id: 2, name: "기술 용어" },
-]
 
 /** Check if Step 2 (AI Summary) should be enabled */
 export function isStep2Enabled(status: MeetingStatus): boolean {

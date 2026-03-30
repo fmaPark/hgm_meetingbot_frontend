@@ -35,7 +35,7 @@ interface MeetingTableProps {
 }
 
 const SORTABLE_COLUMNS: { field: SortField; label: string; width: string }[] = [
-  { field: "date", label: "날짜", width: "w-[120px]" },
+  { field: "start_time", label: "날짜", width: "w-[120px]" },
   { field: "project", label: "프로젝트", width: "w-[140px]" },
   { field: "part", label: "파트", width: "w-[120px]" },
 ]
@@ -71,8 +71,7 @@ export function MeetingTable({
                 </span>
               </TableHead>
             ))}
-            <TableHead className="min-w-0">제목</TableHead>
-            <TableHead className="w-[100px]">주최자</TableHead>
+            <TableHead className="w-[100px]">작성자</TableHead>
             <TableHead
               className="w-[100px] cursor-pointer select-none hover:bg-gray-50"
               onClick={() => onSortChange("status")}
@@ -97,14 +96,11 @@ export function MeetingTable({
               }}
             >
               <TableCell className="text-text-secondary">
-                {formatRelativeDate(meeting.date)}
+                {formatRelativeDate(meeting.start_time)}
               </TableCell>
               <TableCell>{meeting.project}</TableCell>
               <TableCell>{meeting.part}</TableCell>
-              <TableCell className="max-w-0">
-                <span className="block truncate">{meeting.title}</span>
-              </TableCell>
-              <TableCell>{meeting.host}</TableCell>
+              <TableCell>{meeting.author_nick}</TableCell>
               <TableCell>
                 <StatusBadge status={meeting.status} />
               </TableCell>
@@ -219,8 +215,7 @@ function MeetingTableSkeleton() {
             <TableHead className="w-[120px]">날짜</TableHead>
             <TableHead className="w-[140px]">프로젝트</TableHead>
             <TableHead className="w-[120px]">파트</TableHead>
-            <TableHead>제목</TableHead>
-            <TableHead className="w-[100px]">주최자</TableHead>
+            <TableHead className="w-[100px]">작성자</TableHead>
             <TableHead className="w-[100px]">상태</TableHead>
             <TableHead className="w-[140px] text-right">액션</TableHead>
           </TableRow>

@@ -12,20 +12,20 @@ import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { EmptyState } from "@/components/empty-state"
-import type { KeywordSet } from "@/lib/prompt-keyword-types"
+import {
+  useKeywords,
+  useCreateKeyword,
+  useUpdateKeyword,
+  useDeleteKeyword,
+} from "@/lib/hooks/use-prompts"
 import { KEYWORD_MAX } from "@/lib/prompt-keyword-types"
 
-interface KeywordManagementPanelProps {
-  keywordSets: KeywordSet[]
-  onKeywordSetsChange: (sets: KeywordSet[]) => void
-  loading?: boolean
-}
+export function KeywordManagementPanel() {
+  const { data: keywordsData = [], isLoading: loading } = useKeywords()
+  const createMutation = useCreateKeyword()
+  const updateMutation = useUpdateKeyword()
+  const deleteMutation = useDeleteKeyword()
 
-export function KeywordManagementPanel({
-  keywordSets,
-  onKeywordSetsChange,
-  loading = false,
-}: KeywordManagementPanelProps) {
   const [selectedId, setSelectedId] = useState<number | null>(null)
 
   // Editing state
@@ -34,10 +34,10 @@ export function KeywordManagementPanel({
   const [editKeywords, setEditKeywords] = useState<string[]>([])
   const [keywordInput, setKeywordInput] = useState("")
   const [isDirty, setIsDirty] = useState(false)
+  const [isNew, setIsNew] = useState(false)
 
   // Delete dialog
-  const [deleteTarget, setDeleteTarget] = useState<KeywordSet | null>(null)
-  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null)
 
   // Unsaved changes dialog
   const [pendingSelectId, setPendingSelectId] = useState<number | null>(null)
@@ -45,22 +45,40 @@ export function KeywordManagementPanel({
 
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Sorted: isGlobal first, then by createdAt ascending
-  const sortedSets = [...keywordSets].sort((a, b) => {
-    if (a.isGlobal !== b.isGlobal) return a.isGlobal ? -1 : 1
-    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  // Sorted: isGlobal first, then by id ascending
+  const sortedSets = [...keywordsData].sort((a, b) => {
+    if (a.is_global !== b.is_global) return a.is_global ? -1 : 1
+    return a.id - b.id
   })
 
-  const selectedSet = keywordSets.find((s) => s.id === selectedId) ?? null
+  // Map API keywords (Record<string, string>) to string[] for editing
+  function apiKeywordsToList(kw: Record<string, string>): string[] {
+    return Object.keys(kw)
+  }
 
-  const loadSet = useCallback((set: KeywordSet) => {
-    setSelectedId(set.id)
-    setEditName(set.name)
-    setEditIsGlobal(set.isGlobal)
-    setEditKeywords([...set.keywords])
-    setKeywordInput("")
-    setIsDirty(false)
-  }, [])
+  // Map string[] back to Record<string, string> for API
+  function listToApiKeywords(list: string[]): Record<string, string> {
+    const result: Record<string, string> = {}
+    for (const k of list) {
+      result[k] = k
+    }
+    return result
+  }
+
+  const loadSet = useCallback(
+    (id: number) => {
+      const set = keywordsData.find((s) => s.id === id)
+      if (!set) return
+      setSelectedId(set.id)
+      setEditName(set.name)
+      setEditIsGlobal(set.is_global)
+      setEditKeywords(apiKeywordsToList(set.keywords))
+      setKeywordInput("")
+      setIsDirty(false)
+      setIsNew(false)
+    },
+    [keywordsData]
+  )
 
   const handleSelect = useCallback(
     (id: number) => {
@@ -70,40 +88,34 @@ export function KeywordManagementPanel({
         setUnsavedDialogOpen(true)
         return
       }
-      const set = keywordSets.find((s) => s.id === id)
-      if (set) loadSet(set)
+      loadSet(id)
     },
-    [selectedId, isDirty, keywordSets, loadSet]
+    [selectedId, isDirty, loadSet]
   )
 
   const handleUnsavedDiscard = useCallback(() => {
     setUnsavedDialogOpen(false)
     if (pendingSelectId !== null && pendingSelectId !== -1) {
-      const set = keywordSets.find((s) => s.id === pendingSelectId)
-      if (set) loadSet(set)
+      loadSet(pendingSelectId)
     }
     setPendingSelectId(null)
-  }, [pendingSelectId, keywordSets, loadSet])
+  }, [pendingSelectId, loadSet])
 
-  const doAdd = useCallback(() => {
-    const id = Date.now()
-    const newSet: KeywordSet = {
-      id,
-      name: "",
-      isGlobal: false,
-      createdAt: new Date().toISOString(),
-      keywords: [],
-    }
-    onKeywordSetsChange([...keywordSets, newSet])
-    loadSet(newSet)
+  const doStartNew = useCallback(() => {
+    setSelectedId(null)
+    setEditName("")
+    setEditIsGlobal(false)
+    setEditKeywords([])
+    setKeywordInput("")
     setIsDirty(true)
-  }, [keywordSets, onKeywordSetsChange, loadSet])
+    setIsNew(true)
+  }, [])
 
   const handleUnsavedDiscardForAdd = useCallback(() => {
     setUnsavedDialogOpen(false)
     setPendingSelectId(null)
-    doAdd()
-  }, [doAdd])
+    doStartNew()
+  }, [doStartNew])
 
   const handleAdd = useCallback(() => {
     if (isDirty) {
@@ -111,64 +123,78 @@ export function KeywordManagementPanel({
       setUnsavedDialogOpen(true)
       return
     }
-    doAdd()
-  }, [isDirty, doAdd])
+    doStartNew()
+  }, [isDirty, doStartNew])
 
   const handleSave = useCallback(() => {
     if (!editName.trim()) {
       toast.error("세트명을 입력해주세요.")
       return
     }
-    const updated = keywordSets.map((s) =>
-      s.id === selectedId
-        ? { ...s, name: editName.trim(), isGlobal: editIsGlobal, keywords: editKeywords }
-        : s
-    )
-    onKeywordSetsChange(updated)
-    setIsDirty(false)
-    toast.success("저장 완료")
-  }, [keywordSets, selectedId, editName, editIsGlobal, editKeywords, onKeywordSetsChange])
+
+    const payload = {
+      name: editName.trim(),
+      is_global: editIsGlobal,
+      keywords: listToApiKeywords(editKeywords),
+    }
+
+    if (isNew) {
+      createMutation.mutate(payload, {
+        onSuccess: (created) => {
+          setIsDirty(false)
+          setIsNew(false)
+          setSelectedId(created.id)
+          toast.success("키워드 세트 생성 완료")
+        },
+        onError: () => toast.error("키워드 세트 생성 실패"),
+      })
+    } else if (selectedId !== null) {
+      updateMutation.mutate(
+        { keywordId: selectedId, data: payload },
+        {
+          onSuccess: () => {
+            setIsDirty(false)
+            toast.success("저장 완료")
+          },
+          onError: () => toast.error("저장 실패"),
+        }
+      )
+    }
+  }, [editName, editIsGlobal, editKeywords, isNew, selectedId, createMutation, updateMutation])
 
   const handleCancel = useCallback(() => {
-    if (selectedSet) {
-      loadSet(selectedSet)
+    if (isNew) {
+      setSelectedId(null)
+      setIsDirty(false)
+      setIsNew(false)
+      return
     }
-  }, [selectedSet, loadSet])
+    if (selectedId !== null) {
+      loadSet(selectedId)
+    }
+  }, [isNew, selectedId, loadSet])
 
   const handleDeleteRequest = useCallback(() => {
-    if (selectedSet) setDeleteTarget(selectedSet)
-  }, [selectedSet])
+    if (selectedId !== null) setDeleteTargetId(selectedId)
+  }, [selectedId])
 
   const handleDeleteConfirm = useCallback(() => {
-    if (!deleteTarget) return
-    setDeleteLoading(true)
-    setTimeout(() => {
-      const updated = keywordSets.filter((s) => s.id !== deleteTarget.id)
-      onKeywordSetsChange(updated)
-      if (selectedId === deleteTarget.id) {
-        setSelectedId(null)
-        setIsDirty(false)
-      }
-      setDeleteTarget(null)
-      setDeleteLoading(false)
-      toast.success("삭제 완료")
-    }, 400)
-  }, [deleteTarget, keywordSets, selectedId, onKeywordSetsChange])
+    if (deleteTargetId === null) return
+    deleteMutation.mutate(deleteTargetId, {
+      onSuccess: () => {
+        if (selectedId === deleteTargetId) {
+          setSelectedId(null)
+          setIsDirty(false)
+          setIsNew(false)
+        }
+        setDeleteTargetId(null)
+        toast.success("삭제 완료")
+      },
+      onError: () => toast.error("삭제 실패"),
+    })
+  }, [deleteTargetId, selectedId, deleteMutation])
 
   // ─── Keyword chip handlers ───────────────────────
-
-  const addKeyword = useCallback(
-    (raw: string) => {
-      const keyword = raw.trim()
-      if (!keyword) return
-      if (editKeywords.length >= KEYWORD_MAX) return
-      if (editKeywords.includes(keyword)) return // Duplicate ignored
-      setEditKeywords((prev) => [...prev, keyword])
-      setKeywordInput("")
-      setIsDirty(true)
-    },
-    [editKeywords]
-  )
 
   const removeKeyword = useCallback((keyword: string) => {
     setEditKeywords((prev) => prev.filter((k) => k !== keyword))
@@ -179,19 +205,18 @@ export function KeywordManagementPanel({
     (e: KeyboardEvent<HTMLInputElement>) => {
       if (e.key === "Enter" || e.key === ",") {
         e.preventDefault()
-        // Split by comma for bulk input
         const parts = keywordInput.split(",")
+        const newKeywords = [...editKeywords]
         for (const part of parts) {
           const trimmed = part.trim()
-          if (trimmed && !editKeywords.includes(trimmed) && editKeywords.length < KEYWORD_MAX) {
-            editKeywords.push(trimmed)
+          if (trimmed && !newKeywords.includes(trimmed) && newKeywords.length < KEYWORD_MAX) {
+            newKeywords.push(trimmed)
           }
         }
-        setEditKeywords([...editKeywords])
+        setEditKeywords(newKeywords)
         setKeywordInput("")
         setIsDirty(true)
       } else if (e.key === "Backspace" && keywordInput === "" && editKeywords.length > 0) {
-        // Remove last keyword
         setEditKeywords((prev) => prev.slice(0, -1))
         setIsDirty(true)
       }
@@ -200,6 +225,11 @@ export function KeywordManagementPanel({
   )
 
   const isAtMax = editKeywords.length >= KEYWORD_MAX
+  const showEditor = selectedId !== null || isNew
+
+  const deleteTargetName = deleteTargetId !== null
+    ? keywordsData.find((s) => s.id === deleteTargetId)?.name ?? "키워드 세트"
+    : "키워드 세트"
 
   // ─── Loading skeleton ───────────────────────────
   if (loading) {
@@ -219,7 +249,7 @@ export function KeywordManagementPanel({
   }
 
   // ─── Empty state ───────────────────────────
-  if (keywordSets.length === 0) {
+  if (keywordsData.length === 0 && !isNew) {
     return (
       <div className="flex flex-col">
         <div className="flex items-center justify-between border-b border-border p-4">
@@ -270,7 +300,7 @@ export function KeywordManagementPanel({
             >
               <span className="flex-1 truncate">{set.name || "새 키워드 세트"}</span>
               <div className="flex shrink-0 items-center gap-1.5">
-                {set.isGlobal && (
+                {set.is_global && (
                   <Badge
                     variant="secondary"
                     className="bg-blue-100 text-blue-800"
@@ -279,7 +309,7 @@ export function KeywordManagementPanel({
                   </Badge>
                 )}
                 <Badge variant="outline" className="text-xs">
-                  {set.keywords.length}개
+                  {Object.keys(set.keywords).length}개
                 </Badge>
               </div>
             </button>
@@ -288,7 +318,7 @@ export function KeywordManagementPanel({
       </div>
 
       {/* Edit Area */}
-      {selectedId !== null ? (
+      {showEditor ? (
         <>
           <Separator />
           <div className="flex flex-col gap-4 p-4">
@@ -377,18 +407,25 @@ export function KeywordManagementPanel({
 
             {/* Footer */}
             <div className="flex items-center justify-between pt-2">
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={handleDeleteRequest}
-              >
-                삭제
-              </Button>
+              {!isNew && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleDeleteRequest}
+                >
+                  삭제
+                </Button>
+              )}
+              {isNew && <div />}
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={handleCancel}>
                   취소
                 </Button>
-                <Button size="sm" onClick={handleSave}>
+                <Button
+                  size="sm"
+                  onClick={handleSave}
+                  disabled={createMutation.isPending || updateMutation.isPending}
+                >
                   저장
                 </Button>
               </div>
@@ -408,18 +445,18 @@ export function KeywordManagementPanel({
 
       {/* Delete Confirmation */}
       <ConfirmDialog
-        open={deleteTarget !== null}
+        open={deleteTargetId !== null}
         onOpenChange={(open) => {
-          if (!open) setDeleteTarget(null)
+          if (!open) setDeleteTargetId(null)
         }}
         title="키워드 세트 삭제"
-        description={`${deleteTarget?.name || "키워드 세트"}을(를) 삭제하시겠습니까?`}
+        description={`${deleteTargetName}을(를) 삭제하시겠습니까?`}
         confirmText="삭제"
         cancelText="취소"
         variant="destructive"
-        loading={deleteLoading}
+        loading={deleteMutation.isPending}
         onConfirm={handleDeleteConfirm}
-        onCancel={() => setDeleteTarget(null)}
+        onCancel={() => setDeleteTargetId(null)}
       />
 
       {/* Unsaved Changes Dialog */}

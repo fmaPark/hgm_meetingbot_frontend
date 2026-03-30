@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect, useRef } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { toast } from "sonner"
 import { AppLayout } from "@/components/app-layout"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -22,80 +22,37 @@ import {
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog"
 import type { Project, Part, AsanaConfig } from "@/lib/settings-types"
-import { SAMPLE_PROJECTS, SAMPLE_PARTS } from "@/lib/settings-types"
-import type { Prompt, KeywordSet } from "@/lib/prompt-keyword-types"
 import {
-  SAMPLE_PROMPTS,
-  SAMPLE_KEYWORD_SETS,
-} from "@/lib/prompt-keyword-types"
+  useProjects,
+  useCreateProject,
+  useUpdateProject,
+  useDeleteProject,
+  useAddPart,
+  useUpdatePart,
+  useDeletePart,
+  useUpdateAsanaConfig,
+  useAsanaConfigFromUrl,
+} from "@/lib/hooks/use-projects"
 
 type DeleteTarget =
   | { type: "project"; project: Project }
   | { type: "part"; part: Part }
 
-/** Mobile sub-tabs for prompt/keyword panels */
-function PromptKeywordMobileTabs({
-  prompts,
-  onPromptsChange,
-  keywordSets,
-  onKeywordSetsChange,
-  loading,
-}: {
-  prompts: Prompt[]
-  onPromptsChange: (p: Prompt[]) => void
-  keywordSets: KeywordSet[]
-  onKeywordSetsChange: (k: KeywordSet[]) => void
-  loading: boolean
-}) {
-  return (
-    <Tabs defaultValue="prompt" className="w-full gap-0">
-      <div className="border-b border-border bg-card px-4">
-        <TabsList className="h-10 w-full rounded-none bg-transparent p-0">
-          <TabsTrigger
-            value="prompt"
-            className="flex-1 rounded-none border-b-2 border-transparent bg-transparent text-sm font-medium text-text-secondary shadow-none data-[state=active]:border-b-brand-green data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
-          >
-            프롬프트
-          </TabsTrigger>
-          <TabsTrigger
-            value="keyword"
-            className="flex-1 rounded-none border-b-2 border-transparent bg-transparent text-sm font-medium text-text-secondary shadow-none data-[state=active]:border-b-brand-green data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
-          >
-            키워드
-          </TabsTrigger>
-        </TabsList>
-      </div>
-      <TabsContent value="prompt" className="mt-0 bg-card">
-        <PromptManagementPanel
-          prompts={prompts}
-          onPromptsChange={onPromptsChange}
-          loading={loading}
-        />
-      </TabsContent>
-      <TabsContent value="keyword" className="mt-0 bg-card">
-        <KeywordManagementPanel
-          keywordSets={keywordSets}
-          onKeywordSetsChange={onKeywordSetsChange}
-          loading={loading}
-        />
-      </TabsContent>
-    </Tabs>
-  )
-}
-
 export default function SettingsProjectsPage() {
   const isMobile = useIsMobile()
 
-  // Data state
-  const [projects, setProjects] = useState<Project[]>([])
-  const [partsMap, setPartsMap] = useState<Record<number, Part[]>>({})
-  const [loading, setLoading] = useState(true)
-  const [partsLoading, setPartsLoading] = useState(false)
+  // ─── API Data ──────────────────────────────────────
+  const { data: projects = [], isLoading: loading } = useProjects()
 
-  // Prompt & Keyword state
-  const [prompts, setPrompts] = useState<Prompt[]>([])
-  const [keywordSets, setKeywordSets] = useState<KeywordSet[]>([])
-  const [promptsLoading, setPromptsLoading] = useState(true)
+  // ─── Mutations ─────────────────────────────────────
+  const createProjectMutation = useCreateProject()
+  const updateProjectMutation = useUpdateProject()
+  const deleteProjectMutation = useDeleteProject()
+  const addPartMutation = useAddPart()
+  const updatePartMutation = useUpdatePart()
+  const deletePartMutation = useDeletePart()
+  const updateAsanaConfigMutation = useUpdateAsanaConfig()
+  const asanaConfigFromUrlMutation = useAsanaConfigFromUrl()
 
   // Selection state
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
@@ -113,27 +70,21 @@ export default function SettingsProjectsPage() {
 
   // Delete dialog state
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
-  const [deleteLoading, setDeleteLoading] = useState(false)
 
   // "Cannot delete" info dialog
   const [cannotDeleteMsg, setCannotDeleteMsg] = useState<string | null>(null)
 
-  // Next ID counters
-  const nextProjectId = useRef(100)
-  const nextPartId = useRef(100)
-
-  // Load sample data
+  // Sync selectedProject with fresh data after mutations
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setProjects(SAMPLE_PROJECTS)
-      setPartsMap(SAMPLE_PARTS)
-      setLoading(false)
-      setPrompts(SAMPLE_PROMPTS)
-      setKeywordSets(SAMPLE_KEYWORD_SETS)
-      setPromptsLoading(false)
-    }, 600)
-    return () => clearTimeout(timer)
-  }, [])
+    if (selectedProject && projects.length > 0) {
+      const fresh = projects.find((p) => p.id === selectedProject.id)
+      if (fresh) {
+        setSelectedProject(fresh)
+      } else {
+        setSelectedProject(null)
+      }
+    }
+  }, [projects]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Mobile browser back
   useEffect(() => {
@@ -153,15 +104,8 @@ export default function SettingsProjectsPage() {
   const handleSelectProject = useCallback(
     (project: Project) => {
       setSelectedProject(project)
-      setPartsLoading(true)
-
-      // Simulate loading parts
-      setTimeout(() => {
-        setPartsLoading(false)
-      }, 300)
 
       if (isMobile) {
-        // Push state for back navigation
         window.history.pushState({ view: "parts" }, "")
         setMobileView("parts")
       }
@@ -171,62 +115,58 @@ export default function SettingsProjectsPage() {
 
   const handleAddProject = useCallback(
     (name: string) => {
-      const id = nextProjectId.current++
-      const newProject: Project = { id, name, partCount: 0 }
-      setProjects((prev) => [...prev, newProject])
-      setPartsMap((prev) => ({ ...prev, [id]: [] }))
-      toast.success("프로젝트 생성 완료")
+      createProjectMutation.mutate(
+        { name },
+        {
+          onSuccess: () => toast.success("프로젝트 생성 완료"),
+          onError: () => toast.error("프로젝트 생성 실패"),
+        }
+      )
     },
-    []
+    [createProjectMutation]
   )
 
   const handleRenameProject = useCallback(
     (id: number, name: string) => {
-      setProjects((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, name } : p))
+      updateProjectMutation.mutate(
+        { projectId: id, data: { name } },
+        {
+          onSuccess: () => toast.success("프로젝트 이름 변경 완료"),
+          onError: () => toast.error("이름 변경 실패"),
+        }
       )
-      if (selectedProject?.id === id) {
-        setSelectedProject((prev) => (prev ? { ...prev, name } : prev))
-      }
-      toast.success("프로젝트 이름 변경 완료")
     },
-    [selectedProject]
+    [updateProjectMutation]
   )
 
   const handleDeleteProjectRequest = useCallback(
     (project: Project) => {
-      const partCount = partsMap[project.id]?.length ?? 0
-      if (partCount > 0) {
+      if (project.parts.length > 0) {
         setCannotDeleteMsg(
-          `하위 파트가 ${partCount}개 있어 삭제할 수 없습니다. 파트를 먼저 삭제해주세요.`
+          `하위 파트가 ${project.parts.length}개 있어 삭제할 수 없습니다. 파트를 먼저 삭제해주세요.`
         )
         return
       }
       setDeleteTarget({ type: "project", project })
     },
-    [partsMap]
+    []
   )
 
   const handleDeleteProjectConfirm = useCallback(() => {
     if (deleteTarget?.type !== "project") return
-    setDeleteLoading(true)
     const projectId = deleteTarget.project.id
 
-    setTimeout(() => {
-      setProjects((prev) => prev.filter((p) => p.id !== projectId))
-      setPartsMap((prev) => {
-        const copy = { ...prev }
-        delete copy[projectId]
-        return copy
-      })
-      if (selectedProject?.id === projectId) {
-        setSelectedProject(null)
-      }
-      setDeleteTarget(null)
-      setDeleteLoading(false)
-      toast.success("프로젝트 삭제 완료")
-    }, 500)
-  }, [deleteTarget, selectedProject])
+    deleteProjectMutation.mutate(projectId, {
+      onSuccess: () => {
+        if (selectedProject?.id === projectId) {
+          setSelectedProject(null)
+        }
+        setDeleteTarget(null)
+        toast.success("프로젝트 삭제 완료")
+      },
+      onError: () => toast.error("프로젝트 삭제 실패"),
+    })
+  }, [deleteTarget, selectedProject, deleteProjectMutation])
 
   // ─── Part Handlers ────────────────────────────────
 
@@ -241,99 +181,68 @@ export default function SettingsProjectsPage() {
   }, [])
 
   const handleSavePart = useCallback(
-    (data: { name: string; driveId: string }) => {
+    (data: { name: string; drive_folder_id: string }) => {
       if (!selectedProject) return
 
       if (editingPart) {
         // Update existing part
-        setPartsMap((prev) => ({
-          ...prev,
-          [selectedProject.id]: (prev[selectedProject.id] ?? []).map((p) =>
-            p.id === editingPart.id
-              ? {
-                  ...p,
-                  name: data.name,
-                  driveId: data.driveId,
-                  driveConnected: data.driveId.trim() !== "",
-                }
-              : p
-          ),
-        }))
-        toast.success("파트 수정 완료")
+        updatePartMutation.mutate(
+          {
+            partId: editingPart.id,
+            data: {
+              name: data.name,
+              drive_folder_id: data.drive_folder_id || null,
+            },
+          },
+          {
+            onSuccess: () => {
+              setPartModalOpen(false)
+              setEditingPart(null)
+              toast.success("파트 수정 완료")
+            },
+            onError: () => toast.error("파트 수정 실패"),
+          }
+        )
       } else {
         // Add new part
-        const id = nextPartId.current++
-        const newPart: Part = {
-          id,
-          projectId: selectedProject.id,
-          name: data.name,
-          driveId: data.driveId || null,
-          driveConnected: data.driveId.trim() !== "",
-          asanaConfigured: false,
-        }
-        setPartsMap((prev) => ({
-          ...prev,
-          [selectedProject.id]: [...(prev[selectedProject.id] ?? []), newPart],
-        }))
-        // Update partCount
-        setProjects((prev) =>
-          prev.map((p) =>
-            p.id === selectedProject.id
-              ? { ...p, partCount: p.partCount + 1 }
-              : p
-          )
+        addPartMutation.mutate(
+          {
+            projectName: selectedProject.name,
+            data: {
+              name: data.name,
+              drive_folder_id: data.drive_folder_id || null,
+            },
+          },
+          {
+            onSuccess: () => {
+              setPartModalOpen(false)
+              setEditingPart(null)
+              toast.success("파트 생성 완료")
+            },
+            onError: () => toast.error("파트 생성 실패"),
+          }
         )
-        setSelectedProject((prev) =>
-          prev ? { ...prev, partCount: prev.partCount + 1 } : prev
-        )
-        toast.success("파트 생성 완료")
       }
-
-      setPartModalOpen(false)
-      setEditingPart(null)
     },
-    [selectedProject, editingPart]
+    [selectedProject, editingPart, updatePartMutation, addPartMutation]
   )
 
   const handleDeletePartRequest = useCallback((part: Part) => {
-    // For demo, we simulate: parts with id <= 3 "have meetings"
-    if (part.id <= 2) {
-      const meetingCount = part.id === 1 ? 5 : 3
-      setCannotDeleteMsg(
-        `해당 파트에 회의 기록이 ${meetingCount}개 있어 삭제할 수 없습니다.`
-      )
-      return
-    }
     setDeleteTarget({ type: "part", part })
   }, [])
 
   const handleDeletePartConfirm = useCallback(() => {
-    if (deleteTarget?.type !== "part" || !selectedProject) return
-    setDeleteLoading(true)
+    if (deleteTarget?.type !== "part") return
     const partId = deleteTarget.part.id
 
-    setTimeout(() => {
-      setPartsMap((prev) => ({
-        ...prev,
-        [selectedProject.id]: (prev[selectedProject.id] ?? []).filter(
-          (p) => p.id !== partId
-        ),
-      }))
-      setProjects((prev) =>
-        prev.map((p) =>
-          p.id === selectedProject.id
-            ? { ...p, partCount: Math.max(0, p.partCount - 1) }
-            : p
-        )
-      )
-      setSelectedProject((prev) =>
-        prev ? { ...prev, partCount: Math.max(0, prev.partCount - 1) } : prev
-      )
-      setDeleteTarget(null)
-      setDeleteLoading(false)
-      toast.success("파트 삭제 완료")
-    }, 500)
-  }, [deleteTarget, selectedProject])
+    deletePartMutation.mutate(partId, {
+      onSuccess: () => {
+        setDeleteTarget(null)
+        toast.success("파트 삭제 완료")
+      },
+      onError: () => toast.error("파트 삭제 실패"),
+    })
+  }, [deleteTarget, deletePartMutation])
 
   const handleOpenAsana = useCallback((part: Part) => {
     setAsanaPart(part)
@@ -342,33 +251,31 @@ export default function SettingsProjectsPage() {
 
   const handleSaveAsana = useCallback(
     (partId: number, config: AsanaConfig) => {
-      if (!selectedProject) return
-
-      setPartsMap((prev) => ({
-        ...prev,
-        [selectedProject.id]: (prev[selectedProject.id] ?? []).map((p) =>
-          p.id === partId
-            ? {
-                ...p,
-                asanaConfigured: !!config.projectId,
-                asanaConfig: {
-                  ...config,
-                  projectName: config.projectId
-                    ? `Project-${config.projectId.slice(0, 5)}`
-                    : undefined,
-                  sectionName: config.sectionId
-                    ? `Section-${config.sectionId.slice(0, 5)}`
-                    : undefined,
-                },
-              }
-            : p
-        ),
-      }))
-      setAsanaModalOpen(false)
-      setAsanaPart(null)
-      toast.success("Asana 설정 저장 완료")
+      updateAsanaConfigMutation.mutate(
+        { partId, data: config },
+        {
+          onSuccess: () => {
+            setAsanaModalOpen(false)
+            setAsanaPart(null)
+            toast.success("Asana 설정 저장 완료")
+          },
+          onError: () => toast.error("Asana 설정 저장 실패"),
+        }
+      )
     },
-    [selectedProject]
+    [updateAsanaConfigMutation]
+  )
+
+  const handleFetchAsanaFromUrl = useCallback(
+    async (url: string, fieldName: string, enumName: string, driveFieldName: string) => {
+      return asanaConfigFromUrlMutation.mutateAsync({
+        url,
+        field_name: fieldName,
+        enum_name: enumName,
+        drive_field_name: driveFieldName,
+      })
+    },
+    [asanaConfigFromUrlMutation]
   )
 
   const handleMobileBack = useCallback(() => {
@@ -376,13 +283,9 @@ export default function SettingsProjectsPage() {
   }, [])
 
   // ─── Current parts for selected project ────────────────
-
-  const currentParts = selectedProject
-    ? partsMap[selectedProject.id] ?? []
-    : []
+  const currentParts = selectedProject?.parts ?? []
 
   // ─── Delete dialog label helpers ────────────────
-
   const deleteDialogTitle =
     deleteTarget?.type === "project" ? "프로젝트 삭제" : "파트 삭제"
   const deleteDialogDesc =
@@ -391,6 +294,9 @@ export default function SettingsProjectsPage() {
       : deleteTarget?.type === "part"
         ? `${deleteTarget.part.name}을(를) 삭제하시겠습니까?`
         : ""
+
+  const deleteLoading =
+    deleteProjectMutation.isPending || deletePartMutation.isPending
 
   return (
     <AppLayout>
@@ -440,7 +346,6 @@ export default function SettingsProjectsPage() {
                     onEditPart={handleOpenEditPart}
                     onDeletePart={handleDeletePartRequest}
                     onAsanaSettings={handleOpenAsana}
-                    loading={partsLoading}
                   />
                 </div>
               </div>
@@ -483,7 +388,6 @@ export default function SettingsProjectsPage() {
                     onEditPart={handleOpenEditPart}
                     onDeletePart={handleDeletePartRequest}
                     onAsanaSettings={handleOpenAsana}
-                    loading={partsLoading}
                     isMobile
                   />
                 </div>
@@ -496,29 +400,15 @@ export default function SettingsProjectsPage() {
             {!isMobile ? (
               <div className="flex min-h-[calc(100vh-65px)]">
                 <div className="w-1/2 overflow-y-auto border-r border-border bg-card">
-                  <PromptManagementPanel
-                    prompts={prompts}
-                    onPromptsChange={setPrompts}
-                    loading={promptsLoading}
-                  />
+                  <PromptManagementPanel />
                 </div>
                 <div className="w-1/2 overflow-y-auto bg-card">
-                  <KeywordManagementPanel
-                    keywordSets={keywordSets}
-                    onKeywordSetsChange={setKeywordSets}
-                    loading={promptsLoading}
-                  />
+                  <KeywordManagementPanel />
                 </div>
               </div>
             ) : (
               /* Mobile: sub-tabs */
-              <PromptKeywordMobileTabs
-                prompts={prompts}
-                onPromptsChange={setPrompts}
-                keywordSets={keywordSets}
-                onKeywordSetsChange={setKeywordSets}
-                loading={promptsLoading}
-              />
+              <PromptKeywordMobileTabs />
             )}
           </TabsContent>
         </Tabs>
@@ -548,6 +438,8 @@ export default function SettingsProjectsPage() {
         }}
         part={asanaPart}
         onSave={handleSaveAsana}
+        onFetchFromUrl={handleFetchAsanaFromUrl}
+        fetching={asanaConfigFromUrlMutation.isPending}
       />
 
       {/* Delete Confirmation Dialog */}
@@ -592,5 +484,35 @@ export default function SettingsProjectsPage() {
         </AlertDialogContent>
       </AlertDialog>
     </AppLayout>
+  )
+}
+
+/** Mobile sub-tabs for prompt/keyword panels */
+function PromptKeywordMobileTabs() {
+  return (
+    <Tabs defaultValue="prompt" className="w-full gap-0">
+      <div className="border-b border-border bg-card px-4">
+        <TabsList className="h-10 w-full rounded-none bg-transparent p-0">
+          <TabsTrigger
+            value="prompt"
+            className="flex-1 rounded-none border-b-2 border-transparent bg-transparent text-sm font-medium text-text-secondary shadow-none data-[state=active]:border-b-brand-green data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+          >
+            프롬프트
+          </TabsTrigger>
+          <TabsTrigger
+            value="keyword"
+            className="flex-1 rounded-none border-b-2 border-transparent bg-transparent text-sm font-medium text-text-secondary shadow-none data-[state=active]:border-b-brand-green data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+          >
+            키워드
+          </TabsTrigger>
+        </TabsList>
+      </div>
+      <TabsContent value="prompt" className="mt-0 bg-card">
+        <PromptManagementPanel />
+      </TabsContent>
+      <TabsContent value="keyword" className="mt-0 bg-card">
+        <KeywordManagementPanel />
+      </TabsContent>
+    </Tabs>
   )
 }

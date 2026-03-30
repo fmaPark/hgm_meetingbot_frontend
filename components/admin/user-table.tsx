@@ -14,18 +14,12 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/table"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
 import type { AdminUser, UserSortConfig, UserSortField } from "@/lib/admin-types"
 import {
-  ROLE_BADGE_STYLES,
+  getRoleBadgeStyle,
   STATUS_BADGE_STYLES,
   getInitials,
-  formatPartAccess,
+  formatPartAccessLabel,
 } from "@/lib/admin-types"
 
 interface UserTableProps {
@@ -48,9 +42,10 @@ function SortIcon({ field, sort }: { field: UserSortField; sort: UserSortConfig 
 }
 
 function PartAccessCell({ user }: { user: AdminUser }) {
-  const access = formatPartAccess(user.partAccess)
+  const isAdmin = user.roles.includes("admin")
+  const label = formatPartAccessLabel(user.authorizedPartIds, isAdmin)
 
-  if (access.type === "all") {
+  if (isAdmin) {
     return (
       <Badge className="border-transparent bg-green-100 text-green-800 hover:bg-green-100">
         전체 접근
@@ -58,23 +53,12 @@ function PartAccessCell({ user }: { user: AdminUser }) {
     )
   }
 
-  if (access.type === "none") {
+  if (user.authorizedPartIds.length === 0) {
     return <span className="text-sm text-gray-400">접근 없음</span>
   }
 
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="cursor-default text-sm text-foreground underline decoration-dashed underline-offset-4">
-            {access.label}
-          </span>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" className="max-w-[200px]">
-          <p className="text-xs">{access.parts!.join(", ")}</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <span className="text-sm text-foreground">{label}</span>
   )
 }
 
@@ -161,88 +145,91 @@ export function UserTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {users.map((user) => (
-            <TableRow key={user.id}>
-              {/* Profile */}
-              <TableCell>
-                <div className="flex items-center gap-3">
-                  <Avatar className="size-8">
-                    {user.avatar ? (
-                      <AvatarImage src={user.avatar} alt={user.name} />
-                    ) : null}
-                    <AvatarFallback className="bg-brand-green/10 text-xs font-medium text-brand-green">
-                      {getInitials(user.name)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="text-sm font-medium text-foreground">
-                    {user.name}
-                  </span>
-                </div>
-              </TableCell>
+          {users.map((user) => {
+            const statusKey = user.isActive ? "active" : "inactive"
+            return (
+              <TableRow key={user.id}>
+                {/* Profile */}
+                <TableCell>
+                  <div className="flex items-center gap-3">
+                    <Avatar className="size-8">
+                      {user.avatar ? (
+                        <AvatarImage src={user.avatar} alt={user.name} />
+                      ) : null}
+                      <AvatarFallback className="bg-brand-green/10 text-xs font-medium text-brand-green">
+                        {getInitials(user.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="text-sm font-medium text-foreground">
+                      {user.name}
+                    </span>
+                  </div>
+                </TableCell>
 
-              {/* Email */}
-              <TableCell className="text-sm text-text-secondary">
-                {user.email}
-              </TableCell>
+                {/* Email */}
+                <TableCell className="text-sm text-text-secondary">
+                  {user.email}
+                </TableCell>
 
-              {/* Roles */}
-              <TableCell>
-                <div className="flex flex-wrap gap-1">
-                  {user.roles.map((role) => {
-                    const style = ROLE_BADGE_STYLES[role] ?? ROLE_BADGE_STYLES.other
-                    return (
-                      <Badge
-                        key={role}
-                        className={cn(
-                          "border-transparent hover:opacity-100",
-                          style.bg,
-                          style.text
-                        )}
-                      >
-                        {style.label}
-                      </Badge>
-                    )
-                  })}
-                </div>
-              </TableCell>
+                {/* Roles */}
+                <TableCell>
+                  <div className="flex flex-wrap gap-1">
+                    {user.roles.map((role) => {
+                      const style = getRoleBadgeStyle(role)
+                      return (
+                        <Badge
+                          key={role}
+                          className={cn(
+                            "border-transparent hover:opacity-100",
+                            style.bg,
+                            style.text
+                          )}
+                        >
+                          {style.label}
+                        </Badge>
+                      )
+                    })}
+                  </div>
+                </TableCell>
 
-              {/* Part Access */}
-              <TableCell>
-                <PartAccessCell user={user} />
-              </TableCell>
+                {/* Part Access */}
+                <TableCell>
+                  <PartAccessCell user={user} />
+                </TableCell>
 
-              {/* Status */}
-              <TableCell>
-                <Badge
-                  className={cn(
-                    "border-transparent",
-                    STATUS_BADGE_STYLES[user.status].bg,
-                    STATUS_BADGE_STYLES[user.status].text
-                  )}
-                >
-                  {STATUS_BADGE_STYLES[user.status].label}
-                </Badge>
-              </TableCell>
+                {/* Status */}
+                <TableCell>
+                  <Badge
+                    className={cn(
+                      "border-transparent",
+                      STATUS_BADGE_STYLES[statusKey].bg,
+                      STATUS_BADGE_STYLES[statusKey].text
+                    )}
+                  >
+                    {STATUS_BADGE_STYLES[statusKey].label}
+                  </Badge>
+                </TableCell>
 
-              {/* Last Login */}
-              <TableCell className="text-sm text-text-secondary">
-                {user.lastLogin}
-              </TableCell>
+                {/* Last Login */}
+                <TableCell className="text-sm text-text-secondary">
+                  {user.lastLogin}
+                </TableCell>
 
-              {/* Action */}
-              <TableCell>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5 text-xs"
-                  onClick={() => onPermissionSettings(user)}
-                >
-                  <Settings className="size-3.5" />
-                  권한 설정
-                </Button>
-              </TableCell>
-            </TableRow>
-          ))}
+                {/* Action */}
+                <TableCell>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 text-xs"
+                    onClick={() => onPermissionSettings(user)}
+                  >
+                    <Settings className="size-3.5" />
+                    권한 설정
+                  </Button>
+                </TableCell>
+              </TableRow>
+            )
+          })}
         </TableBody>
       </Table>
     </div>

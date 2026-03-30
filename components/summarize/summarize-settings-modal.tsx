@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { X } from "lucide-react"
 import {
   Dialog,
@@ -21,15 +21,10 @@ import { Separator } from "@/components/ui/separator"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { useIsMobile } from "@/hooks/use-mobile"
 
-import type { Meeting } from "@/lib/meeting-types"
-import type { MeetingStatus } from "@/components/status-badge"
-import {
-  SAMPLE_STT_MODELS,
-  SAMPLE_LLM_MODELS,
-  SAMPLE_PROMPTS,
-  SAMPLE_KEYWORDS,
-  type PromptPreset,
-} from "@/lib/summarize-types"
+import type { Meeting, MeetingStatus } from "@/lib/meeting-types"
+import type { PromptPreset } from "@/lib/summarize-types"
+import { useSttModels, useLlmModels, usePrompts, useKeywords, useCreatePrompt } from "@/lib/hooks/use-prompts"
+import { useTranscribeMeeting, useSummarizeMeeting } from "@/lib/hooks/use-meetings"
 
 import { MeetingInfoCard } from "./meeting-info-card"
 import { SttStep } from "./stt-step"
@@ -39,19 +34,54 @@ interface SummarizeSettingsModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   meeting: Meeting | null
-  onStatusChange?: (meetingId: number, newStatus: MeetingStatus) => void
 }
 
 export function SummarizeSettingsModal({
   open,
   onOpenChange,
   meeting,
-  onStatusChange,
 }: SummarizeSettingsModalProps) {
   const isMobile = useIsMobile()
 
-  // Loading state (simulate fetching config data)
-  const [configLoading, setConfigLoading] = useState(true)
+  // API data queries
+  const { data: sttModelNames = [], isLoading: sttLoading } = useSttModels()
+  const { data: llmModelNames = [], isLoading: llmLoading } = useLlmModels()
+  const { data: promptsData = [], isLoading: promptsLoading } = usePrompts()
+  const { data: keywordsData = [], isLoading: keywordsLoading } = useKeywords()
+
+  const configLoading = sttLoading || llmLoading || promptsLoading || keywordsLoading
+
+  // Map API data to UI types
+  const sttModels = useMemo(
+    () => sttModelNames.map((name) => ({ id: name, name })),
+    [sttModelNames]
+  )
+  const llmModels = useMemo(
+    () => llmModelNames.map((name) => ({ id: name, name })),
+    [llmModelNames]
+  )
+  const promptPresets: PromptPreset[] = useMemo(
+    () =>
+      promptsData.map((p) => ({
+        id: p.id,
+        name: p.name,
+        content: p.prompts.map((t) => t.prompt_text).join("\n"),
+        isGlobal: p.is_global,
+      })),
+    [promptsData]
+  )
+  const keywordSets = useMemo(
+    () => [
+      { id: 0, name: "선택 안 함" },
+      ...keywordsData.map((k) => ({ id: k.id, name: k.name })),
+    ],
+    [keywordsData]
+  )
+
+  // Mutations
+  const transcribeMutation = useTranscribeMeeting()
+  const summarizeMutation = useSummarizeMeeting()
+  const createPromptMutation = useCreatePrompt()
 
   // Current meeting status (can change as STT progresses)
   const [currentStatus, setCurrentStatus] = useState<MeetingStatus>("STOPPED")
@@ -64,10 +94,6 @@ export function SummarizeSettingsModal({
   const [selectedPrompt, setSelectedPrompt] = useState("")
   const [promptContent, setPromptContent] = useState("")
   const [selectedKeyword, setSelectedKeyword] = useState("0")
-  const [summarizeLoading, setSummarizeLoading] = useState(false)
-
-  // Prompt presets (mutable, can add new ones)
-  const [prompts, setPrompts] = useState<PromptPreset[]>([])
 
   // Close confirmation (when STT is processing)
   const [showCloseConfirm, setShowCloseConfirm] = useState(false)
@@ -78,81 +104,100 @@ export function SummarizeSettingsModal({
   // Reset state when meeting changes or modal opens
   useEffect(() => {
     if (open && meeting) {
-      setConfigLoading(true)
       setCurrentStatus(meeting.status)
-      setSelectedSttModel(String(SAMPLE_STT_MODELS[0].id))
-      setSelectedLlmModel(String(SAMPLE_LLM_MODELS[0].id))
-      setPrompts([...SAMPLE_PROMPTS])
-      setSelectedPrompt(String(SAMPLE_PROMPTS[0].id))
-      setPromptContent(SAMPLE_PROMPTS[0].content)
+      setSelectedSttModel("")
+      setSelectedLlmModel("")
+      setSelectedPrompt("")
+      setPromptContent("")
       setSelectedKeyword("0")
-      setSummarizeLoading(false)
       setShowCloseConfirm(false)
       setToast(null)
-
-      // Simulate config loading
-      const timer = setTimeout(() => setConfigLoading(false), 600)
-      return () => clearTimeout(timer)
     }
   }, [open, meeting])
+
+  // Set defaults once config data is loaded
+  useEffect(() => {
+    if (!configLoading && open) {
+      if (sttModels.length > 0 && !selectedSttModel) {
+        setSelectedSttModel(sttModels[0].id)
+      }
+      if (llmModels.length > 0 && !selectedLlmModel) {
+        setSelectedLlmModel(llmModels[0].id)
+      }
+      if (promptPresets.length > 0 && !selectedPrompt) {
+        setSelectedPrompt(String(promptPresets[0].id))
+        setPromptContent(promptPresets[0].content)
+      }
+    }
+  }, [configLoading, open, sttModels, llmModels, promptPresets, selectedSttModel, selectedLlmModel, selectedPrompt])
 
   // Handle prompt preset change
   const handlePromptChange = useCallback(
     (value: string) => {
       setSelectedPrompt(value)
-      const preset = prompts.find((p) => String(p.id) === value)
+      const preset = promptPresets.find((p) => String(p.id) === value)
       if (preset) {
         setPromptContent(preset.content)
       }
     },
-    [prompts]
+    [promptPresets]
   )
 
   // Handle save new prompt
   const handleSavePrompt = useCallback(
     (name: string) => {
-      const newPrompt: PromptPreset = {
-        id: Math.max(...prompts.map((p) => p.id)) + 1,
-        name,
-        content: promptContent,
-        isGlobal: false,
-      }
-      setPrompts((prev) => [...prev, newPrompt])
-      setSelectedPrompt(String(newPrompt.id))
-      showToast("프롬프트 저장 완료")
+      createPromptMutation.mutate(
+        { name, prompts: [{ type: "system", prompt_text: promptContent }] },
+        {
+          onSuccess: () => {
+            showToast("프롬프트 저장 완료")
+          },
+        }
+      )
     },
-    [prompts, promptContent]
+    [promptContent, createPromptMutation]
   )
 
   // Start STT conversion
   const handleStartStt = useCallback(() => {
     if (!meeting) return
     setCurrentStatus("PROCESSING")
-    onStatusChange?.(meeting.id, "PROCESSING")
-
-    // Simulate STT processing (3 seconds)
-    setTimeout(() => {
-      setCurrentStatus("TRANSCRIBED")
-      onStatusChange?.(meeting.id, "TRANSCRIBED")
-    }, 3000)
-  }, [meeting, onStatusChange])
+    transcribeMutation.mutate(
+      { meetingId: meeting.id, data: { stt_model: selectedSttModel } },
+      {
+        onSuccess: () => {
+          setCurrentStatus("TRANSCRIBED")
+        },
+        onError: () => {
+          setCurrentStatus("FAILED")
+        },
+      }
+    )
+  }, [meeting, selectedSttModel, transcribeMutation])
 
   // Start AI summarization
   const handleStartSummarize = useCallback(() => {
     if (!meeting) return
-    setSummarizeLoading(true)
+    const selectedKw = keywordsData.find((k) => String(k.id) === selectedKeyword)
+    const selectedPr = promptsData.find((p) => String(p.id) === selectedPrompt)
 
-    setTimeout(() => {
-      setSummarizeLoading(false)
-      onStatusChange?.(meeting.id, "PROCESSING")
-      showToast("요약을 시작합니다")
-
-      // Close modal after short delay so user sees the toast
-      setTimeout(() => {
-        onOpenChange(false)
-      }, 800)
-    }, 500)
-  }, [meeting, onStatusChange, onOpenChange])
+    summarizeMutation.mutate(
+      {
+        meetingId: meeting.id,
+        data: {
+          model: selectedLlmModel,
+          instruction_name: selectedPr?.name ?? "",
+          keywords_name: selectedKw?.name ?? "",
+        },
+      },
+      {
+        onSuccess: () => {
+          showToast("요약을 시작합니다")
+          setTimeout(() => onOpenChange(false), 800)
+        },
+      }
+    )
+  }, [meeting, selectedLlmModel, selectedPrompt, selectedKeyword, keywordsData, promptsData, summarizeMutation, onOpenChange])
 
   // Handle close attempt
   const handleCloseAttempt = useCallback(() => {
@@ -174,10 +219,10 @@ export function SummarizeSettingsModal({
   const modalContent = (
     <div className="flex flex-col gap-4">
       <MeetingInfoCard
-        title={meeting.title}
         project={meeting.project}
         part={meeting.part}
-        date={meeting.date}
+        authorNick={meeting.author_nick}
+        startTime={meeting.start_time}
         status={currentStatus}
       />
 
@@ -185,7 +230,7 @@ export function SummarizeSettingsModal({
 
       <SttStep
         status={currentStatus}
-        sttModels={SAMPLE_STT_MODELS}
+        sttModels={sttModels}
         selectedSttModel={selectedSttModel}
         onSttModelChange={setSelectedSttModel}
         onStartStt={handleStartStt}
@@ -194,9 +239,9 @@ export function SummarizeSettingsModal({
 
       <AiSummaryStep
         status={currentStatus}
-        llmModels={SAMPLE_LLM_MODELS}
-        prompts={prompts}
-        keywords={SAMPLE_KEYWORDS}
+        llmModels={llmModels}
+        prompts={promptPresets}
+        keywords={keywordSets}
         selectedLlmModel={selectedLlmModel}
         onLlmModelChange={setSelectedLlmModel}
         selectedPrompt={selectedPrompt}
@@ -207,7 +252,7 @@ export function SummarizeSettingsModal({
         onKeywordChange={setSelectedKeyword}
         onStartSummarize={handleStartSummarize}
         onSavePrompt={handleSavePrompt}
-        summarizeLoading={summarizeLoading}
+        summarizeLoading={summarizeMutation.isPending}
         loading={configLoading}
       />
     </div>
@@ -238,7 +283,6 @@ export function SummarizeSettingsModal({
             side="bottom"
             className="flex h-full flex-col gap-0 rounded-t-xl p-0 sm:max-w-none"
           >
-            {/* Fixed Header */}
             <SheetHeader className="flex flex-row items-center justify-between border-b border-border px-4 py-3">
               <SheetTitle className="text-base">요약 설정</SheetTitle>
               <button
@@ -250,12 +294,10 @@ export function SummarizeSettingsModal({
               </button>
             </SheetHeader>
 
-            {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto px-4 py-4">
               {modalContent}
             </div>
 
-            {/* Fixed Footer */}
             <SheetFooter className="border-t border-border px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
               <Button
                 variant="outline"
@@ -303,7 +345,6 @@ export function SummarizeSettingsModal({
           showCloseButton={false}
           className="flex max-h-[85vh] max-w-[800px] flex-col gap-0 p-0"
         >
-          {/* Header */}
           <DialogHeader className="flex flex-row items-center justify-between border-b border-border px-6 py-4">
             <DialogTitle className="text-lg">요약 설정</DialogTitle>
             <button
@@ -315,12 +356,10 @@ export function SummarizeSettingsModal({
             </button>
           </DialogHeader>
 
-          {/* Scrollable Content */}
           <div className="flex-1 overflow-y-auto px-6 py-4">
             {modalContent}
           </div>
 
-          {/* Footer */}
           <DialogFooter className="border-t border-border px-6 py-4">
             <Button variant="outline" onClick={handleCloseAttempt}>
               닫기

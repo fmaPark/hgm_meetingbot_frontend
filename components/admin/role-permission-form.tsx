@@ -9,11 +9,12 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ALL_PERMISSIONS, ALL_PERMISSION_NAMES } from "@/lib/rbac-types"
-import type { RoleFormState, Role } from "@/lib/rbac-types"
+import type { RoleFormState } from "@/lib/rbac-types"
+import type { RoleWithPermissions } from "@/lib/api/types"
 
 interface RolePermissionFormProps {
   form: RoleFormState
-  originalRole: Role | null
+  originalRole: RoleWithPermissions | null
   isNew: boolean
   hasChanges: boolean
   onFormChange: (form: RoleFormState) => void
@@ -102,7 +103,7 @@ export function RolePermissionForm({
         </h2>
 
         {/* Role name input */}
-        <div className="mb-4">
+        <div className="mb-6">
           <label
             htmlFor="role-name"
             className="mb-1.5 block text-sm font-medium text-foreground"
@@ -125,30 +126,6 @@ export function RolePermissionForm({
           {nameError && (
             <p className="mt-1 text-xs text-destructive">{nameError}</p>
           )}
-        </div>
-
-        {/* Description input */}
-        <div className="mb-6">
-          <label
-            htmlFor="role-desc"
-            className="mb-1.5 block text-sm font-medium text-foreground"
-          >
-            설명
-          </label>
-          <Input
-            id="role-desc"
-            value={form.description}
-            onChange={(e) => {
-              if (e.target.value.length <= 100) {
-                onFormChange({ ...form, description: e.target.value })
-              }
-            }}
-            placeholder="역할 설명 (최대 100자)"
-            className="text-sm"
-          />
-          <p className="mt-1 text-xs text-muted-foreground">
-            {form.description.length}/100
-          </p>
         </div>
 
         <Separator />
@@ -189,17 +166,17 @@ export function RolePermissionForm({
 
           {/* Permission checkboxes - 2 column grid */}
           <div className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
-            {ALL_PERMISSIONS.map((perm) => {
+            {ALL_PERMISSIONS.map((perm, idx) => {
               const isChecked = form.permissions.includes(perm.name)
               return (
-                <div key={perm.id} className="flex items-center gap-2">
+                <div key={perm.name} className="flex items-center gap-2">
                   <Checkbox
-                    id={`perm-${perm.id}`}
+                    id={`perm-${idx}`}
                     checked={isChecked}
                     onCheckedChange={() => handleTogglePermission(perm.name)}
                   />
                   <label
-                    htmlFor={`perm-${perm.id}`}
+                    htmlFor={`perm-${idx}`}
                     className="cursor-pointer text-sm text-foreground"
                   >
                     <span className="font-mono text-xs text-muted-foreground">

@@ -1,28 +1,32 @@
-import { StatusBadge, type MeetingStatus } from "@/components/status-badge"
+import { StatusBadge } from "@/components/status-badge"
+import type { MeetingStatus } from "@/lib/api/types"
+import { formatRelativeDate } from "@/lib/meeting-types"
 
 interface MeetingInfoCardProps {
-  title: string
   project: string
   part: string
-  date: string
+  authorNick: string
+  startTime: string
   status: MeetingStatus
 }
 
 export function MeetingInfoCard({
-  title,
   project,
   part,
-  date,
+  authorNick,
+  startTime,
   status,
 }: MeetingInfoCardProps) {
   return (
     <div className="rounded-lg bg-gray-50 p-4">
-      <p className="font-semibold text-foreground">{title}</p>
-      <p className="mt-1 text-sm text-text-secondary">
+      <p className="font-semibold text-foreground">
         {project} / {part}
       </p>
+      <p className="mt-1 text-sm text-text-secondary">
+        {authorNick}
+      </p>
       <div className="mt-2 flex items-center justify-between">
-        <span className="text-sm text-text-secondary">{date}</span>
+        <span className="text-sm text-text-secondary">{formatRelativeDate(startTime)}</span>
         <StatusBadge status={status} />
       </div>
     </div>

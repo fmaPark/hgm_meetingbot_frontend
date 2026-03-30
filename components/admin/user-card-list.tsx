@@ -8,10 +8,10 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { AdminUser } from "@/lib/admin-types"
 import {
-  ROLE_BADGE_STYLES,
+  getRoleBadgeStyle,
   STATUS_BADGE_STYLES,
   getInitials,
-  formatPartAccess,
+  formatPartAccessLabel,
 } from "@/lib/admin-types"
 
 interface UserCardListProps {
@@ -57,7 +57,9 @@ export function UserCardList({
   return (
     <div className="flex flex-col gap-2 px-4">
       {users.map((user) => {
-        const access = formatPartAccess(user.partAccess)
+        const isAdmin = user.roles.includes("admin")
+        const accessLabel = formatPartAccessLabel(user.authorizedPartIds, isAdmin)
+        const statusKey = user.isActive ? "active" : "inactive"
 
         return (
           <div
@@ -81,7 +83,7 @@ export function UserCardList({
               </div>
               <div className="flex gap-1">
                 {user.roles.map((role) => {
-                  const style = ROLE_BADGE_STYLES[role] ?? ROLE_BADGE_STYLES.other
+                  const style = getRoleBadgeStyle(role)
                   return (
                     <Badge
                       key={role}
@@ -106,25 +108,25 @@ export function UserCardList({
               <Badge
                 className={cn(
                   "border-transparent text-[10px]",
-                  STATUS_BADGE_STYLES[user.status].bg,
-                  STATUS_BADGE_STYLES[user.status].text
+                  STATUS_BADGE_STYLES[statusKey].bg,
+                  STATUS_BADGE_STYLES[statusKey].text
                 )}
               >
-                {STATUS_BADGE_STYLES[user.status].label}
+                {STATUS_BADGE_STYLES[statusKey].label}
               </Badge>
             </div>
 
             {/* Bottom: Part access info | Settings button */}
             <div className="mt-3 flex items-center justify-between">
               <div className="text-xs text-text-secondary">
-                {access.type === "all" ? (
+                {isAdmin ? (
                   <Badge className="border-transparent bg-green-100 text-[10px] text-green-800 hover:bg-green-100">
                     전체 접근
                   </Badge>
-                ) : access.type === "none" ? (
+                ) : user.authorizedPartIds.length === 0 ? (
                   <span className="text-gray-400">접근 없음</span>
                 ) : (
-                  <span>{access.label}</span>
+                  <span>{accessLabel}</span>
                 )}
               </div>
               <Button

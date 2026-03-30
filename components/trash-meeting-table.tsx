@@ -39,7 +39,7 @@ interface TrashMeetingTableProps {
 }
 
 const SORTABLE_COLUMNS: { field: TrashSortField; label: string; width: string }[] = [
-  { field: "date", label: "날짜", width: "w-[120px]" },
+  { field: "start_time", label: "날짜", width: "w-[120px]" },
   { field: "project", label: "프로젝트", width: "w-[120px]" },
   { field: "part", label: "파트", width: "w-[100px]" },
 ]
@@ -73,8 +73,7 @@ export function TrashMeetingTable({
                 </span>
               </TableHead>
             ))}
-            <TableHead className="min-w-0">제목</TableHead>
-            <TableHead className="w-[100px]">주최자</TableHead>
+            <TableHead className="w-[100px]">작성자</TableHead>
             <TableHead
               className="w-[100px] cursor-pointer select-none hover:bg-gray-50"
               onClick={() => onSortChange("status")}
@@ -86,11 +85,11 @@ export function TrashMeetingTable({
             </TableHead>
             <TableHead
               className="w-[120px] cursor-pointer select-none hover:bg-gray-50"
-              onClick={() => onSortChange("deletedAt")}
+              onClick={() => onSortChange("deleted_at")}
             >
               <span className="inline-flex items-center gap-1">
                 삭제일
-                <SortIndicator field="deletedAt" sort={sort} />
+                <SortIndicator field="deleted_at" sort={sort} />
               </span>
             </TableHead>
             <TableHead className="w-[120px] text-right">액션</TableHead>
@@ -109,28 +108,27 @@ export function TrashMeetingTable({
               }}
             >
               <TableCell className="text-text-secondary">
-                {formatRelativeDate(meeting.date)}
+                {formatRelativeDate(meeting.start_time)}
               </TableCell>
               <TableCell>{meeting.project}</TableCell>
               <TableCell>{meeting.part}</TableCell>
-              <TableCell className="max-w-0">
-                <span className="block truncate">{meeting.title}</span>
-              </TableCell>
-              <TableCell>{meeting.host}</TableCell>
+              <TableCell>{meeting.author_nick}</TableCell>
               <TableCell>
                 <StatusBadge status={meeting.status} />
               </TableCell>
               <TableCell>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="cursor-default text-sm text-text-secondary">
-                      {formatDeletedRelative(meeting.deletedAt)}
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {formatDaysUntilPermanent(meeting.daysUntilPermanent)}
-                  </TooltipContent>
-                </Tooltip>
+                {meeting.deleted_at && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="cursor-default text-sm text-text-secondary">
+                        {formatDeletedRelative(meeting.deleted_at)}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {formatDaysUntilPermanent(meeting.deleted_at)}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
               </TableCell>
               <TableCell className="text-right">
                 <TrashActions
@@ -209,8 +207,7 @@ function TrashTableSkeleton() {
             <TableHead className="w-[120px]">날짜</TableHead>
             <TableHead className="w-[120px]">프로젝트</TableHead>
             <TableHead className="w-[100px]">파트</TableHead>
-            <TableHead>제목</TableHead>
-            <TableHead className="w-[100px]">주최자</TableHead>
+            <TableHead className="w-[100px]">작성자</TableHead>
             <TableHead className="w-[100px]">상태</TableHead>
             <TableHead className="w-[120px]">삭제일</TableHead>
             <TableHead className="w-[120px] text-right">액션</TableHead>
@@ -222,7 +219,6 @@ function TrashTableSkeleton() {
               <TableCell><Skeleton className="h-4 w-16" /></TableCell>
               <TableCell><Skeleton className="h-4 w-20" /></TableCell>
               <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-              <TableCell><Skeleton className="h-4 w-40" /></TableCell>
               <TableCell><Skeleton className="h-4 w-14" /></TableCell>
               <TableCell><Skeleton className="h-5 w-16 rounded-full" /></TableCell>
               <TableCell><Skeleton className="h-4 w-14" /></TableCell>

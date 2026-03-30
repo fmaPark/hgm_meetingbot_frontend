@@ -249,7 +249,7 @@ export function ProjectListPanel({
                   variant="secondary"
                   className="shrink-0 bg-secondary text-text-secondary text-xs"
                 >
-                  {project.partCount}개 파트
+                  {project.parts.length}개 파트
                 </Badge>
               </div>
 

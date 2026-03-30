@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { AppLayout } from "@/components/app-layout"
 import { MeetingFilterBar } from "@/components/meeting-filter-bar"
@@ -11,23 +11,21 @@ import { EmptyMeetings, EmptyFilteredResults } from "@/components/empty-state"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { SummarizeSettingsModal } from "@/components/summarize/summarize-settings-modal"
 import { MeetingSummaryModal } from "@/components/summary/meeting-summary-modal"
-import type { MeetingStatus } from "@/components/status-badge"
 import type {
   Meeting,
   MeetingFilters,
   SortConfig,
   SortField,
 } from "@/lib/meeting-types"
-import { SAMPLE_MEETINGS, hasProcessingItems } from "@/lib/meeting-types"
+import { hasProcessingItems } from "@/lib/meeting-types"
+import { useMeetings, useDeleteMeeting } from "@/lib/hooks/use-meetings"
+import { useProjects } from "@/lib/hooks/use-projects"
+import type { MeetingQueryParams } from "@/lib/api/types"
 
-const PAGE_SIZE = 10
+const PAGE_SIZE = 20
 
 export default function DashboardPage() {
   const router = useRouter()
-
-  // Data
-  const [meetings, setMeetings] = useState<Meeting[]>([])
-  const [loading, setLoading] = useState(true)
 
   // Filters & sort
   const [filters, setFilters] = useState<MeetingFilters>({
@@ -36,88 +34,62 @@ export default function DashboardPage() {
     search: "",
   })
   const [sort, setSort] = useState<SortConfig>({
-    field: "date",
+    field: "start_time",
     direction: "desc",
   })
   const [currentPage, setCurrentPage] = useState(1)
 
-  // Delete dialog
+  // Build API query params from UI state
+  const queryParams = useMemo<MeetingQueryParams>(() => {
+    const params: MeetingQueryParams = {
+      page: currentPage,
+      limit: PAGE_SIZE,
+      sort: sort.field,
+      order: sort.direction,
+    }
+    if (filters.project !== "all") params.project = filters.project
+    if (filters.part !== "all") params.part = filters.part
+    if (filters.search.trim()) params.search = filters.search.trim()
+    return params
+  }, [filters, sort, currentPage])
+
+  // Data queries
+  const meetingsQuery = useMeetings(queryParams)
+  const meetings = meetingsQuery.data?.items ?? []
+  const totalPages = meetingsQuery.data?.total_pages ?? 1
+  const meetingsLoading = meetingsQuery.isLoading
+
+  // Enable polling when processing items exist
+  useMeetings(
+    queryParams,
+    hasProcessingItems(meetings)
+  )
+
+  const { data: projects } = useProjects()
+
+  // Derive project/part names for filter bar
+  const projectNames = useMemo(
+    () => projects?.map((p) => p.name) ?? [],
+    [projects]
+  )
+  const partNames = useMemo(() => {
+    if (!projects) return []
+    const parts = new Set<string>()
+    for (const project of projects) {
+      for (const part of project.parts) {
+        parts.add(part.name)
+      }
+    }
+    return Array.from(parts)
+  }, [projects])
+
+  // Mutations
+  const deleteMutation = useDeleteMeeting()
+
+  // Modal states
   const [deleteTarget, setDeleteTarget] = useState<Meeting | null>(null)
-  const [deleteLoading, setDeleteLoading] = useState(false)
-
-  // Summarize modal
   const [summarizeTarget, setSummarizeTarget] = useState<Meeting | null>(null)
-
-  // Summary viewer/editor modal
   const [viewTarget, setViewTarget] = useState<Meeting | null>(null)
-
-  // ── Initial data load (simulated) ──
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setMeetings(SAMPLE_MEETINGS)
-      setLoading(false)
-    }, 800)
-    return () => clearTimeout(timer)
-  }, [])
-
-  // ── Polling for PROCESSING items ──
-  useEffect(() => {
-    if (!hasProcessingItems(meetings)) return
-    const interval = setInterval(() => {
-      // In a real app this would re-fetch from the API
-      setMeetings((prev) => [...prev])
-    }, 5000)
-    return () => clearInterval(interval)
-  }, [meetings])
-
-  // ── Filter Logic ──
-  const filteredMeetings = useMemo(() => {
-    let result = [...meetings]
-
-    // Project filter
-    if (filters.project !== "all") {
-      result = result.filter((m) => m.project === filters.project)
-    }
-    // Part filter
-    if (filters.part !== "all") {
-      result = result.filter((m) => m.part === filters.part)
-    }
-    // Search filter
-    if (filters.search.trim()) {
-      const q = filters.search.toLowerCase()
-      result = result.filter(
-        (m) =>
-          m.title.toLowerCase().includes(q) ||
-          m.host.toLowerCase().includes(q)
-      )
-    }
-
-    return result
-  }, [meetings, filters])
-
-  // ── Sort Logic ──
-  const sortedMeetings = useMemo(() => {
-    const result = [...filteredMeetings]
-    const { field, direction } = sort
-    const dir = direction === "asc" ? 1 : -1
-
-    result.sort((a, b) => {
-      const aVal = a[field]
-      const bVal = b[field]
-      if (aVal < bVal) return -1 * dir
-      if (aVal > bVal) return 1 * dir
-      return 0
-    })
-
-    return result
-  }, [filteredMeetings, sort])
-
-  // ── Pagination Logic ──
-  const totalPages = Math.max(1, Math.ceil(sortedMeetings.length / PAGE_SIZE))
-  const paginatedMeetings = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE
-    return sortedMeetings.slice(start, start + PAGE_SIZE)
-  }, [sortedMeetings, currentPage])
 
   // ── Handlers ──
   const handleFiltersChange = useCallback((newFilters: MeetingFilters) => {
@@ -148,30 +120,14 @@ export default function DashboardPage() {
     setSummarizeTarget(meeting)
   }, [])
 
-  // Handle status change from the summarize modal
-  const handleMeetingStatusChange = useCallback(
-    (meetingId: number, newStatus: MeetingStatus) => {
-      setMeetings((prev) =>
-        prev.map((m) => (m.id === meetingId ? { ...m, status: newStatus } : m))
-      )
-    },
-    []
-  )
-
-  const handleDeleteFromModal = useCallback((meetingId: number) => {
-    setMeetings((prev) => prev.filter((m) => m.id !== meetingId))
-  }, [])
-
   const handleDeleteConfirm = useCallback(() => {
     if (!deleteTarget) return
-    setDeleteLoading(true)
-    // Simulate async delete
-    setTimeout(() => {
-      setMeetings((prev) => prev.filter((m) => m.id !== deleteTarget.id))
-      setDeleteLoading(false)
-      setDeleteTarget(null)
-    }, 1000)
-  }, [deleteTarget])
+    deleteMutation.mutate(deleteTarget.id, {
+      onSuccess: () => {
+        setDeleteTarget(null)
+      },
+    })
+  }, [deleteTarget, deleteMutation])
 
   const handleResetFilters = useCallback(() => {
     setFilters({ project: "all", part: "all", search: "" })
@@ -183,15 +139,17 @@ export default function DashboardPage() {
     filters.project !== "all" ||
     filters.part !== "all" ||
     filters.search.trim() !== ""
-  const isNoData = !loading && meetings.length === 0
+  const isNoData = !meetingsLoading && meetings.length === 0 && !hasFiltersApplied
   const isFilteredEmpty =
-    !loading && meetings.length > 0 && sortedMeetings.length === 0
+    !meetingsLoading && meetings.length === 0 && hasFiltersApplied
 
   return (
     <AppLayout>
       <MeetingFilterBar
         filters={filters}
         onFiltersChange={handleFiltersChange}
+        projects={projectNames}
+        parts={partNames}
         hasDeletePermission
         onTrashClick={() => router.push("/dashboard/trash")}
       />
@@ -207,30 +165,30 @@ export default function DashboardPage() {
             {/* Desktop: Table view */}
             <div className="hidden w-full md:block">
               <MeetingTable
-                meetings={paginatedMeetings}
+                meetings={meetings}
                 sort={sort}
                 onSortChange={handleSortChange}
                 onView={handleView}
                 onSummarize={handleSummarize}
                 onRetry={handleRetry}
                 onDelete={setDeleteTarget}
-                loading={loading}
+                loading={meetingsLoading}
               />
             </div>
 
             {/* Mobile: Card list view */}
             <div className="md:hidden">
               <MeetingCardList
-                meetings={paginatedMeetings}
+                meetings={meetings}
                 onView={handleView}
                 onSummarize={handleSummarize}
                 onRetry={handleRetry}
                 onDelete={setDeleteTarget}
-                loading={loading}
+                loading={meetingsLoading}
               />
             </div>
 
-            {!loading && (
+            {!meetingsLoading && (
               <MeetingPagination
                 currentPage={currentPage}
                 totalPages={totalPages}
@@ -248,7 +206,6 @@ export default function DashboardPage() {
           if (!open) setSummarizeTarget(null)
         }}
         meeting={summarizeTarget}
-        onStatusChange={handleMeetingStatusChange}
       />
 
       {/* Meeting Summary Viewer/Editor Modal */}
@@ -258,8 +215,6 @@ export default function DashboardPage() {
           if (!open) setViewTarget(null)
         }}
         meeting={viewTarget}
-        onDelete={handleDeleteFromModal}
-        onStatusChange={handleMeetingStatusChange}
       />
 
       {/* Delete Confirmation Dialog */}
@@ -273,7 +228,7 @@ export default function DashboardPage() {
         confirmText="삭제"
         cancelText="취소"
         variant="destructive"
-        loading={deleteLoading}
+        loading={deleteMutation.isPending}
         onConfirm={handleDeleteConfirm}
         onCancel={() => setDeleteTarget(null)}
       />

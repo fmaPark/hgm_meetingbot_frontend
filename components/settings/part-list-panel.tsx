@@ -141,6 +141,9 @@ interface PartCardProps {
 }
 
 function PartCard({ part, onEdit, onDelete, onAsana }: PartCardProps) {
+  const hasDrive = !!part.drive_folder_id
+  const hasAsana = !!part.asana_config?.project_id
+
   return (
     <div className="group relative rounded-lg border border-border bg-card p-4">
       <div className="flex items-start justify-between gap-2">
@@ -154,23 +157,23 @@ function PartCard({ part, onEdit, onDelete, onAsana }: PartCardProps) {
           <div className="flex items-center gap-2 text-xs">
             <Link className="size-3.5 shrink-0 text-text-secondary" />
             <span className="truncate text-text-secondary">
-              {part.driveId ? maskDriveId(part.driveId) : "미설정"}
+              {part.drive_folder_id ? maskDriveId(part.drive_folder_id) : "미설정"}
             </span>
             <Badge
               variant="secondary"
               className={cn(
                 "shrink-0 gap-1 text-[11px]",
-                part.driveConnected
+                hasDrive
                   ? "bg-green-100 text-green-800"
                   : "bg-secondary text-text-secondary"
               )}
             >
-              {part.driveConnected ? (
+              {hasDrive ? (
                 <CheckCircle className="size-3" />
               ) : (
                 <XCircle className="size-3" />
               )}
-              {part.driveConnected ? "연동됨" : "미연동"}
+              {hasDrive ? "연동됨" : "미연동"}
             </Badge>
           </div>
 
@@ -178,25 +181,25 @@ function PartCard({ part, onEdit, onDelete, onAsana }: PartCardProps) {
           <div className="flex items-center gap-2 text-xs">
             <Settings className="size-3.5 shrink-0 text-text-secondary" />
             <span className="truncate text-text-secondary">
-              {part.asanaConfigured && part.asanaConfig
-                ? `${part.asanaConfig.projectName ?? ""} / ${part.asanaConfig.sectionName ?? ""}`
+              {hasAsana
+                ? `Project: ${part.asana_config!.project_id}`
                 : "미설정"}
             </span>
             <Badge
               variant="secondary"
               className={cn(
                 "shrink-0 gap-1 text-[11px]",
-                part.asanaConfigured
+                hasAsana
                   ? "bg-green-100 text-green-800"
                   : "bg-secondary text-text-secondary"
               )}
             >
-              {part.asanaConfigured ? (
+              {hasAsana ? (
                 <CheckCircle className="size-3" />
               ) : (
                 <XCircle className="size-3" />
               )}
-              {part.asanaConfigured ? "설정됨" : "미설정"}
+              {hasAsana ? "설정됨" : "미설정"}
             </Badge>
           </div>
         </div>

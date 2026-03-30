@@ -1,0 +1,3680 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+        "title": "FastAPI",
+        "version": "0.1.0"
+    },
+    "servers": [
+        {
+            "url": "/api"
+        }
+    ],
+    "paths": {
+        "/login/discord": {
+            "get": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Login Discord",
+                "description": "Redirects the user to Discord for authentication.",
+                "operationId": "login_discord_login_discord_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/discord/callback": {
+            "get": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Auth Discord Callback",
+                "description": "Discord OAuth callback endpoint.\nRedirects the received code to the frontend's exchange page.",
+                "operationId": "auth_discord_callback_auth_discord_callback_get",
+                "parameters": [
+                    {
+                        "name": "code",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Code"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/discord/exchange-code": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Exchange Discord Code",
+                "description": "Exchanges a Discord code from the frontend for a token and returns user info.",
+                "operationId": "exchange_discord_code_auth_discord_exchange_code_post",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DiscordCodeExchangeRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LoginResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/token/refresh": {
+            "post": {
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Refresh Access Token",
+                "operationId": "refresh_access_token_token_refresh_post",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LoginResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/admin/users": {
+            "get": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Get All Users",
+                "description": "(Admin) Get a list of all users.",
+                "operationId": "get_all_users_admin_users_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "items": {
+                                        "$ref": "#/components/schemas/User"
+                                    },
+                                    "type": "array",
+                                    "title": "Response Get All Users Admin Users Get"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "user:read"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/admin/users/{user_id}/part-permissions": {
+            "put": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Update User Part Permissions",
+                "description": "(Admin) Update a user's data access permissions (parts).",
+                "operationId": "update_user_part_permissions_admin_users__user_id__part_permissions_put",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "user:update_permissions"
+                        ]
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "title": "User Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserPermissionsUpdate"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/users/{user_id}": {
+            "put": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Update User",
+                "operationId": "update_user_admin_users__user_id__put",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "user:update"
+                        ]
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "title": "User Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UserUpdate"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/User"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Delete User",
+                "operationId": "delete_user_admin_users__user_id__delete",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "user:delete"
+                        ]
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "user_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "title": "User Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Successful Response"
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/rbac/roles": {
+            "get": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "List Roles",
+                "description": "(Admin) Get a list of all available roles with their permissions.",
+                "operationId": "list_roles_admin_rbac_roles_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "items": {
+                                        "$ref": "#/components/schemas/RoleWithPermissions"
+                                    },
+                                    "type": "array",
+                                    "title": "Response List Roles Admin Rbac Roles Get"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "rbac:read"
+                        ]
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Create Role",
+                "description": "(Admin) Create a new role.",
+                "operationId": "create_role_admin_rbac_roles_post",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RoleCreate"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Role"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "rbac:manage_roles"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/admin/rbac/permissions": {
+            "get": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "List Permissions",
+                "description": "(Admin) Get a list of all available permissions.",
+                "operationId": "list_permissions_admin_rbac_permissions_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "items": {
+                                        "$ref": "#/components/schemas/Permission"
+                                    },
+                                    "type": "array",
+                                    "title": "Response List Permissions Admin Rbac Permissions Get"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "rbac:read"
+                        ]
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Create Permission",
+                "description": "(Admin) Create a new permission.",
+                "operationId": "create_permission_admin_rbac_permissions_post",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PermissionCreate"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Permission"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "rbac:manage_permissions"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/admin/rbac/assign-role": {
+            "post": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Assign Role To User",
+                "description": "(Admin) Assign a role to a user.",
+                "operationId": "assign_role_to_user_admin_rbac_assign_role_post",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RoleAssignmentRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "204": {
+                        "description": "Successful Response"
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "rbac:assign"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/admin/rbac/revoke-role": {
+            "post": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Revoke Role From User",
+                "description": "(Admin) Revoke a role from a user.",
+                "operationId": "revoke_role_from_user_admin_rbac_revoke_role_post",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RoleAssignmentRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "204": {
+                        "description": "Successful Response"
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "rbac:assign"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/admin/rbac/assign-permission-to-role": {
+            "post": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Assign Permission To Role",
+                "description": "(Admin) Assign a permission to a role.",
+                "operationId": "assign_permission_to_role_admin_rbac_assign_permission_to_role_post",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PermissionAssignmentRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "204": {
+                        "description": "Successful Response"
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "rbac:assign"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/admin/rbac/revoke-permission-from-role": {
+            "post": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Revoke Permission From Role",
+                "description": "(Admin) Revoke a permission from a role.",
+                "operationId": "revoke_permission_from_role_admin_rbac_revoke_permission_from_role_post",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PermissionAssignmentRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "204": {
+                        "description": "Successful Response"
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "rbac:assign"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/admin/settings/llm": {
+            "get": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Get Llm Settings",
+                "operationId": "get_llm_settings_admin_settings_llm_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LlmSettings"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "settings:read_llm"
+                        ]
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Update Llm Settings",
+                "operationId": "update_llm_settings_admin_settings_llm_put",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/LlmSettingsUpdate"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/LlmSettings"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "settings:manage_llm"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/admin/discord/roles": {
+            "get": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "List Discord Roles",
+                "description": "(Admin) Get a list of all mapped Discord roles.",
+                "operationId": "list_discord_roles_admin_discord_roles_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "items": {
+                                        "$ref": "#/components/schemas/DiscordRoleMapping"
+                                    },
+                                    "type": "array",
+                                    "title": "Response List Discord Roles Admin Discord Roles Get"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "discord:read_roles"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/admin/discord/roles/mapping": {
+            "post": {
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Update Discord Role Mapping",
+                "description": "(Admin) Create or update a mapping between a web role and a Discord role.",
+                "operationId": "update_discord_role_mapping_admin_discord_roles_mapping_post",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/DiscordRoleMappingCreate"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DiscordRoleMapping"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "discord:manage_mapping"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/projects/": {
+            "get": {
+                "tags": [
+                    "Projects & Parts"
+                ],
+                "summary": "Get All Projects",
+                "operationId": "get_all_projects_projects__get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "items": {
+                                        "$ref": "#/components/schemas/Project"
+                                    },
+                                    "type": "array",
+                                    "title": "Response Get All Projects Projects  Get"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "project:read"
+                        ]
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Projects & Parts"
+                ],
+                "summary": "Create Project",
+                "operationId": "create_project_projects__post",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProjectCreate"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Project"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "project:create"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/projects/{project_id}": {
+            "put": {
+                "tags": [
+                    "Projects & Parts"
+                ],
+                "summary": "Update Project",
+                "operationId": "update_project_projects__project_id__put",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "project:update"
+                        ]
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "project_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "title": "Project Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ProjectCreate"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Project"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Projects & Parts"
+                ],
+                "summary": "Delete Project",
+                "operationId": "delete_project_projects__project_id__delete",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "project:delete"
+                        ]
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "project_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "title": "Project Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Successful Response"
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/parts/{part_id}": {
+            "get": {
+                "tags": [
+                    "Projects & Parts"
+                ],
+                "summary": "Get Part",
+                "operationId": "get_part_projects_parts__part_id__get",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "part:read"
+                        ]
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "part_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "title": "Part Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Part"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Projects & Parts"
+                ],
+                "summary": "Update Part",
+                "operationId": "update_part_projects_parts__part_id__put",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "part:update"
+                        ]
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "part_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "title": "Part Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PartUpdate"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Project"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Projects & Parts"
+                ],
+                "summary": "Delete Part",
+                "operationId": "delete_part_projects_parts__part_id__delete",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "part:delete"
+                        ]
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "part_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "title": "Part Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Successful Response"
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/{project_name}/parts": {
+            "post": {
+                "tags": [
+                    "Projects & Parts"
+                ],
+                "summary": "Add Part To Project",
+                "operationId": "add_part_to_project_projects__project_name__parts_post",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "part:create"
+                        ]
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "project_name",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "title": "Project Name"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PartCreate"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Project"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/projects/parts/{part_id}/asana-config": {
+            "put": {
+                "tags": [
+                    "Projects & Parts"
+                ],
+                "summary": "Update Part Asana Config",
+                "operationId": "update_part_asana_config_projects_parts__part_id__asana_config_put",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "asana:manage"
+                        ]
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "part_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "title": "Part Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AsanaConfig"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Project"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/meetings": {
+            "get": {
+                "tags": [
+                    "Meetings"
+                ],
+                "summary": "Get All Meetings",
+                "operationId": "get_all_meetings_meetings_get",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "meeting:read"
+                        ]
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "default": 1,
+                            "title": "Page"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 100,
+                            "minimum": 1,
+                            "default": 20,
+                            "title": "Limit"
+                        }
+                    },
+                    {
+                        "name": "project",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Project"
+                        }
+                    },
+                    {
+                        "name": "part",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Part"
+                        }
+                    },
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "$ref": "#/components/schemas/MeetingStatus"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Status"
+                        }
+                    },
+                    {
+                        "name": "sort",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^(start_time|project|part|status)$",
+                            "default": "start_time",
+                            "title": "Sort"
+                        }
+                    },
+                    {
+                        "name": "order",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^(asc|desc)$",
+                            "default": "desc",
+                            "title": "Order"
+                        }
+                    },
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ],
+                            "title": "Search"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MeetingListResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/meetings/deleted": {
+            "get": {
+                "tags": [
+                    "Meetings"
+                ],
+                "summary": "Get Deleted Meetings",
+                "description": "(Admin) Get a list of all soft-deleted meetings.",
+                "operationId": "get_deleted_meetings_meetings_deleted_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "items": {
+                                        "$ref": "#/components/schemas/Meeting"
+                                    },
+                                    "type": "array",
+                                    "title": "Response Get Deleted Meetings Meetings Deleted Get"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "meeting:read_deleted"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/meetings/purge": {
+            "post": {
+                "tags": [
+                    "Meetings"
+                ],
+                "summary": "Purge Deleted Meetings",
+                "description": "Permanently delete all soft-deleted meetings.",
+                "operationId": "purge_deleted_meetings_meetings_purge_post",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "meeting:purge"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/meetings/{meeting_id}": {
+            "delete": {
+                "tags": [
+                    "Meetings"
+                ],
+                "summary": "Delete Meeting",
+                "description": "Soft delete a meeting.",
+                "operationId": "delete_meeting_meetings__meeting_id__delete",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "meeting:delete"
+                        ]
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "meeting_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "title": "Meeting Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Successful Response"
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/meetings/{meeting_id}/restore": {
+            "post": {
+                "tags": [
+                    "Meetings"
+                ],
+                "summary": "Restore Meeting",
+                "description": "Restore a soft-deleted meeting.",
+                "operationId": "restore_meeting_meetings__meeting_id__restore_post",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "meeting:restore"
+                        ]
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "meeting_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "title": "Meeting Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Meeting"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/meetings/{meeting_id}/transcribe": {
+            "post": {
+                "tags": [
+                    "Meetings"
+                ],
+                "summary": "Transcribe Meeting",
+                "operationId": "transcribe_meeting_meetings__meeting_id__transcribe_post",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "meeting:transcribe"
+                        ]
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "meeting_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "title": "Meeting Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TranscribeRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Meeting"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/meetings/{meeting_id}/transcript": {
+            "get": {
+                "tags": [
+                    "Meetings"
+                ],
+                "summary": "Get Transcript",
+                "operationId": "get_transcript_meetings__meeting_id__transcript_get",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "meeting_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "title": "Meeting Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "text/plain": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/meetings/{meeting_id}/summarize": {
+            "post": {
+                "tags": [
+                    "Meetings"
+                ],
+                "summary": "Summarize Meeting",
+                "operationId": "summarize_meeting_meetings__meeting_id__summarize_post",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "meeting:summarize"
+                        ]
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "meeting_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "title": "Meeting Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SummarizeRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Meeting"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/meetings/{meeting_id}/summary-content": {
+            "get": {
+                "tags": [
+                    "Meetings"
+                ],
+                "summary": "Get Summary Content",
+                "operationId": "get_summary_content_meetings__meeting_id__summary_content_get",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": []
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "meeting_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "title": "Meeting Id"
+                        }
+                    },
+                    {
+                        "name": "path",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "description": "The path of the summary file to retrieve",
+                            "title": "Path"
+                        },
+                        "description": "The path of the summary file to retrieve"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "text/plain": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Meetings"
+                ],
+                "summary": "Edit Summary Content",
+                "operationId": "edit_summary_content_meetings__meeting_id__summary_content_put",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "meeting:edit_summary"
+                        ]
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "meeting_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "title": "Meeting Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateSummaryContentRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/meetings/{meeting_id}/upload-summary": {
+            "post": {
+                "tags": [
+                    "Meetings"
+                ],
+                "summary": "Upload Summary",
+                "operationId": "upload_summary_meetings__meeting_id__upload_summary_post",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "meeting:upload"
+                        ]
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "meeting_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "title": "Meeting Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UploadSummaryRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/UploadSummaryResponse"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/asana/config-from-url": {
+            "post": {
+                "tags": [
+                    "Data Management"
+                ],
+                "summary": "Get Asana Config",
+                "operationId": "get_asana_config_asana_config_from_url_post",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AsanaConfigRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AsanaConfig"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "asana:manage"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/stt-models": {
+            "get": {
+                "tags": [
+                    "Data Management"
+                ],
+                "summary": "Get Stt Models",
+                "description": "Get a list of available STT models.",
+                "operationId": "get_stt_models_stt_models_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array",
+                                    "title": "Response Get Stt Models Stt Models Get"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "settings:read_models"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/models": {
+            "get": {
+                "tags": [
+                    "Data Management"
+                ],
+                "summary": "Get Available Models",
+                "description": "Get a list of available LLM models.",
+                "operationId": "get_available_models_models_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "type": "array",
+                                    "title": "Response Get Available Models Models Get"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "settings:read_models"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/prompts": {
+            "get": {
+                "tags": [
+                    "Data Management"
+                ],
+                "summary": "List Prompts",
+                "operationId": "list_prompts_prompts_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "items": {
+                                        "$ref": "#/components/schemas/PromptData"
+                                    },
+                                    "type": "array",
+                                    "title": "Response List Prompts Prompts Get"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "prompt:read"
+                        ]
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Data Management"
+                ],
+                "summary": "Create Prompt",
+                "operationId": "create_prompt_prompts_post",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PromptDataCreate"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PromptData"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "prompt:create"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/prompts/{prompt_id}": {
+            "get": {
+                "tags": [
+                    "Data Management"
+                ],
+                "summary": "Get Prompt",
+                "operationId": "get_prompt_prompts__prompt_id__get",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "prompt:read"
+                        ]
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "prompt_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "title": "Prompt Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PromptData"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Data Management"
+                ],
+                "summary": "Update Prompt",
+                "operationId": "update_prompt_prompts__prompt_id__put",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "prompt:update"
+                        ]
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "prompt_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "title": "Prompt Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PromptDataCreate"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PromptData"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Data Management"
+                ],
+                "summary": "Delete Prompt",
+                "operationId": "delete_prompt_prompts__prompt_id__delete",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "prompt:delete"
+                        ]
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "prompt_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "title": "Prompt Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Successful Response"
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/keywords": {
+            "get": {
+                "tags": [
+                    "Data Management"
+                ],
+                "summary": "List Keywords",
+                "operationId": "list_keywords_keywords_get",
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "items": {
+                                        "$ref": "#/components/schemas/KeywordData"
+                                    },
+                                    "type": "array",
+                                    "title": "Response List Keywords Keywords Get"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "keyword:read"
+                        ]
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Data Management"
+                ],
+                "summary": "Create Keyword",
+                "operationId": "create_keyword_keywords_post",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/KeywordDataCreate"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/KeywordData"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "keyword:create"
+                        ]
+                    }
+                ]
+            }
+        },
+        "/keywords/{keyword_id}": {
+            "get": {
+                "tags": [
+                    "Data Management"
+                ],
+                "summary": "Get Keyword",
+                "operationId": "get_keyword_keywords__keyword_id__get",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "keyword:read"
+                        ]
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "keyword_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "title": "Keyword Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/KeywordData"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Data Management"
+                ],
+                "summary": "Update Keyword",
+                "operationId": "update_keyword_keywords__keyword_id__put",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "keyword:update"
+                        ]
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "keyword_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "title": "Keyword Id"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/KeywordDataCreate"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful Response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/KeywordData"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Data Management"
+                ],
+                "summary": "Delete Keyword",
+                "operationId": "delete_keyword_keywords__keyword_id__delete",
+                "security": [
+                    {
+                        "HTTPBearer": []
+                    },
+                    {
+                        "bearerAuth": [
+                            "keyword:delete"
+                        ]
+                    }
+                ],
+                "parameters": [
+                    {
+                        "name": "keyword_id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "title": "Keyword Id"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Successful Response"
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "Artifacts": {
+                "properties": {
+                    "audio_path": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Audio Path"
+                    },
+                    "transcript_path": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Transcript Path"
+                    },
+                    "summary_paths": {
+                        "anyOf": [
+                            {
+                                "items": {
+                                    "type": "string"
+                                },
+                                "type": "array"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Summary Paths",
+                        "default": []
+                    },
+                    "share_url": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Share Url"
+                    }
+                },
+                "type": "object",
+                "title": "Artifacts"
+            },
+            "AsanaConfig": {
+                "properties": {
+                    "project_id": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Project Id"
+                    },
+                    "project_field": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Project Field"
+                    },
+                    "project_field_id": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Project Field Id"
+                    },
+                    "drive_field_id": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Drive Field Id"
+                    }
+                },
+                "type": "object",
+                "title": "AsanaConfig"
+            },
+            "AsanaConfigRequest": {
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "title": "Url"
+                    },
+                    "field_name": {
+                        "type": "string",
+                        "title": "Field Name"
+                    },
+                    "enum_name": {
+                        "type": "string",
+                        "title": "Enum Name"
+                    },
+                    "drive_field_name": {
+                        "type": "string",
+                        "title": "Drive Field Name"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "url",
+                    "field_name",
+                    "enum_name",
+                    "drive_field_name"
+                ],
+                "title": "AsanaConfigRequest"
+            },
+            "DiscordCodeExchangeRequest": {
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "title": "Code"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "code"
+                ],
+                "title": "DiscordCodeExchangeRequest"
+            },
+            "DiscordRoleMapping": {
+                "properties": {
+                    "role_id": {
+                        "type": "integer",
+                        "title": "Role Id"
+                    },
+                    "discord_role_id": {
+                        "type": "string",
+                        "title": "Discord Role Id"
+                    },
+                    "discord_role_name": {
+                        "type": "string",
+                        "title": "Discord Role Name"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "role_id",
+                    "discord_role_id",
+                    "discord_role_name"
+                ],
+                "title": "DiscordRoleMapping"
+            },
+            "DiscordRoleMappingCreate": {
+                "properties": {
+                    "role_id": {
+                        "type": "integer",
+                        "title": "Role Id"
+                    },
+                    "discord_role_id": {
+                        "type": "string",
+                        "title": "Discord Role Id"
+                    },
+                    "discord_role_name": {
+                        "type": "string",
+                        "title": "Discord Role Name"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "role_id",
+                    "discord_role_id",
+                    "discord_role_name"
+                ],
+                "title": "DiscordRoleMappingCreate"
+            },
+            "HTTPValidationError": {
+                "properties": {
+                    "detail": {
+                        "items": {
+                            "$ref": "#/components/schemas/ValidationError"
+                        },
+                        "type": "array",
+                        "title": "Detail"
+                    }
+                },
+                "type": "object",
+                "title": "HTTPValidationError"
+            },
+            "KeywordData": {
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    },
+                    "is_global": {
+                        "type": "boolean",
+                        "title": "Is Global",
+                        "default": false
+                    },
+                    "keywords": {
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "type": "object",
+                        "title": "Keywords",
+                        "default": {}
+                    },
+                    "id": {
+                        "type": "integer",
+                        "title": "Id"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "name",
+                    "id"
+                ],
+                "title": "KeywordData"
+            },
+            "KeywordDataCreate": {
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    },
+                    "is_global": {
+                        "type": "boolean",
+                        "title": "Is Global",
+                        "default": false
+                    },
+                    "keywords": {
+                        "additionalProperties": {
+                            "type": "string"
+                        },
+                        "type": "object",
+                        "title": "Keywords",
+                        "default": {}
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "name"
+                ],
+                "title": "KeywordDataCreate"
+            },
+            "LlmSettings": {
+                "properties": {
+                    "openai_api_key_set": {
+                        "type": "boolean",
+                        "title": "Openai Api Key Set",
+                        "default": false
+                    },
+                    "gemini_api_key_set": {
+                        "type": "boolean",
+                        "title": "Gemini Api Key Set",
+                        "default": false
+                    }
+                },
+                "type": "object",
+                "title": "LlmSettings"
+            },
+            "LlmSettingsUpdate": {
+                "properties": {
+                    "openai_api_key": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Openai Api Key"
+                    },
+                    "gemini_api_key": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Gemini Api Key"
+                    }
+                },
+                "type": "object",
+                "title": "LlmSettingsUpdate"
+            },
+            "LoginResponse": {
+                "properties": {
+                    "access_token": {
+                        "type": "string",
+                        "title": "Access Token"
+                    },
+                    "token_type": {
+                        "type": "string",
+                        "title": "Token Type"
+                    },
+                    "user": {
+                        "$ref": "#/components/schemas/User"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "access_token",
+                    "token_type",
+                    "user"
+                ],
+                "title": "LoginResponse"
+            },
+            "Meeting": {
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "title": "Id"
+                    },
+                    "project": {
+                        "type": "string",
+                        "title": "Project"
+                    },
+                    "part": {
+                        "type": "string",
+                        "title": "Part"
+                    },
+                    "author_id": {
+                        "type": "integer",
+                        "title": "Author Id"
+                    },
+                    "author_nick": {
+                        "type": "string",
+                        "title": "Author Nick"
+                    },
+                    "guild_id": {
+                        "type": "integer",
+                        "title": "Guild Id"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/MeetingStatus"
+                    },
+                    "start_time": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Start Time"
+                    },
+                    "artifacts": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/Artifacts"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "deleted_at": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Deleted At"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "id",
+                    "project",
+                    "part",
+                    "author_id",
+                    "author_nick",
+                    "guild_id",
+                    "status",
+                    "start_time"
+                ],
+                "title": "Meeting"
+            },
+            "MeetingListResponse": {
+                "properties": {
+                    "items": {
+                        "items": {
+                            "$ref": "#/components/schemas/Meeting"
+                        },
+                        "type": "array",
+                        "title": "Items"
+                    },
+                    "total": {
+                        "type": "integer",
+                        "title": "Total"
+                    },
+                    "page": {
+                        "type": "integer",
+                        "title": "Page"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "title": "Limit"
+                    },
+                    "total_pages": {
+                        "type": "integer",
+                        "title": "Total Pages"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "items",
+                    "total",
+                    "page",
+                    "limit",
+                    "total_pages"
+                ],
+                "title": "MeetingListResponse"
+            },
+            "MeetingStatus": {
+                "type": "string",
+                "enum": [
+                    "RECORDING",
+                    "STOPPED",
+                    "PROCESSING",
+                    "TRANSCRIBED",
+                    "SUMMARIZED",
+                    "UPLOADED",
+                    "FAILED"
+                ],
+                "title": "MeetingStatus"
+            },
+            "Part": {
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    },
+                    "drive_folder_id": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Drive Folder Id"
+                    },
+                    "asana_config": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/AsanaConfig"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    },
+                    "id": {
+                        "type": "integer",
+                        "title": "Id"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "name",
+                    "id"
+                ],
+                "title": "Part"
+            },
+            "PartCreate": {
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    },
+                    "drive_folder_id": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Drive Folder Id"
+                    },
+                    "asana_config": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/AsanaConfig"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "name"
+                ],
+                "title": "PartCreate"
+            },
+            "PartUpdate": {
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    },
+                    "drive_folder_id": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Drive Folder Id"
+                    },
+                    "asana_config": {
+                        "anyOf": [
+                            {
+                                "$ref": "#/components/schemas/AsanaConfig"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ]
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "name"
+                ],
+                "title": "PartUpdate"
+            },
+            "Permission": {
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "title": "Id"
+                    },
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "id",
+                    "name"
+                ],
+                "title": "Permission"
+            },
+            "PermissionAssignmentRequest": {
+                "properties": {
+                    "role_id": {
+                        "type": "integer",
+                        "title": "Role Id"
+                    },
+                    "permission_id": {
+                        "type": "integer",
+                        "title": "Permission Id"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "role_id",
+                    "permission_id"
+                ],
+                "title": "PermissionAssignmentRequest"
+            },
+            "PermissionCreate": {
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "name"
+                ],
+                "title": "PermissionCreate"
+            },
+            "Project": {
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    },
+                    "id": {
+                        "type": "integer",
+                        "title": "Id"
+                    },
+                    "parts": {
+                        "items": {
+                            "$ref": "#/components/schemas/Part"
+                        },
+                        "type": "array",
+                        "title": "Parts",
+                        "default": []
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "name",
+                    "id"
+                ],
+                "title": "Project"
+            },
+            "ProjectCreate": {
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "name"
+                ],
+                "title": "ProjectCreate"
+            },
+            "PromptData": {
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    },
+                    "is_global": {
+                        "type": "boolean",
+                        "title": "Is Global",
+                        "default": false
+                    },
+                    "prompts": {
+                        "items": {
+                            "$ref": "#/components/schemas/PromptTuple"
+                        },
+                        "type": "array",
+                        "title": "Prompts",
+                        "default": []
+                    },
+                    "id": {
+                        "type": "integer",
+                        "title": "Id"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "name",
+                    "id"
+                ],
+                "title": "PromptData"
+            },
+            "PromptDataCreate": {
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    },
+                    "is_global": {
+                        "type": "boolean",
+                        "title": "Is Global",
+                        "default": false
+                    },
+                    "prompts": {
+                        "items": {
+                            "$ref": "#/components/schemas/PromptTuple"
+                        },
+                        "type": "array",
+                        "title": "Prompts",
+                        "default": []
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "name"
+                ],
+                "title": "PromptDataCreate"
+            },
+            "PromptTuple": {
+                "properties": {
+                    "type": {
+                        "$ref": "#/components/schemas/PromptType"
+                    },
+                    "prompt_text": {
+                        "type": "string",
+                        "title": "Prompt Text"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "type",
+                    "prompt_text"
+                ],
+                "title": "PromptTuple"
+            },
+            "PromptType": {
+                "type": "string",
+                "enum": [
+                    "system",
+                    "prefix",
+                    "suffix"
+                ],
+                "title": "PromptType"
+            },
+            "Role": {
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "title": "Id"
+                    },
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "id",
+                    "name"
+                ],
+                "title": "Role"
+            },
+            "RoleAssignmentRequest": {
+                "properties": {
+                    "user_id": {
+                        "type": "integer",
+                        "title": "User Id"
+                    },
+                    "role_id": {
+                        "type": "integer",
+                        "title": "Role Id"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "user_id",
+                    "role_id"
+                ],
+                "title": "RoleAssignmentRequest"
+            },
+            "RoleCreate": {
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "name"
+                ],
+                "title": "RoleCreate"
+            },
+            "RoleWithPermissions": {
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "title": "Id"
+                    },
+                    "name": {
+                        "type": "string",
+                        "title": "Name"
+                    },
+                    "permissions": {
+                        "items": {
+                            "$ref": "#/components/schemas/Permission"
+                        },
+                        "type": "array",
+                        "title": "Permissions",
+                        "default": []
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "id",
+                    "name"
+                ],
+                "title": "RoleWithPermissions"
+            },
+            "SummarizeRequest": {
+                "properties": {
+                    "model": {
+                        "type": "string",
+                        "title": "Model"
+                    },
+                    "instruction_name": {
+                        "type": "string",
+                        "title": "Instruction Name"
+                    },
+                    "keywords_name": {
+                        "type": "string",
+                        "title": "Keywords Name"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "model",
+                    "instruction_name",
+                    "keywords_name"
+                ],
+                "title": "SummarizeRequest"
+            },
+            "TranscribeRequest": {
+                "properties": {
+                    "stt_model": {
+                        "type": "string",
+                        "title": "Stt Model"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "stt_model"
+                ],
+                "title": "TranscribeRequest"
+            },
+            "UpdateSummaryContentRequest": {
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "title": "Path"
+                    },
+                    "content": {
+                        "type": "string",
+                        "title": "Content"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "path",
+                    "content"
+                ],
+                "title": "UpdateSummaryContentRequest"
+            },
+            "UploadSummaryRequest": {
+                "properties": {
+                    "summary_path": {
+                        "type": "string",
+                        "title": "Summary Path"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "summary_path"
+                ],
+                "title": "UploadSummaryRequest"
+            },
+            "UploadSummaryResponse": {
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "title": "Url"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "url"
+                ],
+                "title": "UploadSummaryResponse"
+            },
+            "User": {
+                "properties": {
+                    "username": {
+                        "type": "string",
+                        "title": "Username"
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "title": "Email"
+                    },
+                    "id": {
+                        "type": "integer",
+                        "title": "Id"
+                    },
+                    "is_active": {
+                        "type": "boolean",
+                        "title": "Is Active"
+                    },
+                    "is_verified": {
+                        "type": "boolean",
+                        "title": "Is Verified"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Created At"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "title": "Updated At"
+                    },
+                    "last_login_at": {
+                        "anyOf": [
+                            {
+                                "type": "string",
+                                "format": "date-time"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Last Login At"
+                    },
+                    "discord_id": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Discord Id"
+                    },
+                    "avatar_url": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Avatar Url"
+                    },
+                    "roles": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Roles",
+                        "default": []
+                    },
+                    "permissions": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Permissions",
+                        "default": []
+                    },
+                    "authorized_part_ids": {
+                        "items": {
+                            "type": "integer"
+                        },
+                        "type": "array",
+                        "title": "Authorized Part Ids",
+                        "default": []
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "username",
+                    "email",
+                    "id",
+                    "is_active",
+                    "is_verified",
+                    "created_at",
+                    "updated_at",
+                    "last_login_at"
+                ],
+                "title": "User"
+            },
+            "UserPermissionsUpdate": {
+                "properties": {
+                    "part_ids": {
+                        "items": {
+                            "type": "integer"
+                        },
+                        "type": "array",
+                        "title": "Part Ids"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "part_ids"
+                ],
+                "title": "UserPermissionsUpdate"
+            },
+            "UserUpdate": {
+                "properties": {
+                    "username": {
+                        "type": "string",
+                        "title": "Username"
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "title": "Email"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "username",
+                    "email"
+                ],
+                "title": "UserUpdate"
+            },
+            "ValidationError": {
+                "properties": {
+                    "loc": {
+                        "items": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "integer"
+                                }
+                            ]
+                        },
+                        "type": "array",
+                        "title": "Location"
+                    },
+                    "msg": {
+                        "type": "string",
+                        "title": "Message"
+                    },
+                    "type": {
+                        "type": "string",
+                        "title": "Error Type"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "loc",
+                    "msg",
+                    "type"
+                ],
+                "title": "ValidationError"
+            }
+        },
+        "securitySchemes": {
+            "HTTPBearer": {
+                "type": "http",
+                "scheme": "bearer"
+            }
+        }
+    }
+}

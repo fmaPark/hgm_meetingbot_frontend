@@ -59,20 +59,20 @@ export function MeetingCardList({
           {/* Top: Date + Status Badge */}
           <div className="flex items-center justify-between">
             <span className="text-xs text-text-secondary">
-              {formatRelativeDate(meeting.date)}
+              {formatRelativeDate(meeting.start_time)}
             </span>
             <StatusBadge status={meeting.status} />
           </div>
 
-          {/* Middle: Title */}
+          {/* Middle: Project / Part */}
           <h3 className="mt-2 line-clamp-2 font-semibold text-foreground">
-            {meeting.title}
+            {meeting.project} / {meeting.part}
           </h3>
 
           {/* Bottom: Info + Actions */}
           <div className="mt-2 flex items-center justify-between">
             <span className="text-xs text-text-secondary">
-              {meeting.project}/{meeting.part} · {meeting.host}
+              {meeting.author_nick}
             </span>
 
             {/* Action Menu */}

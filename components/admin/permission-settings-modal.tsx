@@ -21,69 +21,74 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { PartPermissionTree } from "./part-permission-tree"
 import { RoleManagementTab } from "./role-management-tab"
-import type { AdminUser, UserRole, ProjectTreeItem, PartAccess } from "@/lib/admin-types"
-import { SAMPLE_PROJECT_TREE, getInitials, getAllPartNames } from "@/lib/admin-types"
+import type { AdminUser } from "@/lib/admin-types"
+import { getInitials } from "@/lib/admin-types"
+import { useProjects } from "@/lib/hooks/use-projects"
+import { useUpdateUserPermissions, useAssignRole, useRevokeRole, useRoles } from "@/lib/hooks/use-admin"
+import type { Project } from "@/lib/api/types"
 
 interface PermissionSettingsModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   user: AdminUser | null
-  onSave: (userId: number, partAccess: PartAccess, roles: UserRole[]) => void
+  onSaved?: () => void
 }
 
 export function PermissionSettingsModal({
   open,
   onOpenChange,
   user,
-  onSave,
+  onSaved,
 }: PermissionSettingsModalProps) {
   const isMobile = useIsMobile()
-  const [loading, setLoading] = useState(true)
+  const { data: projects = [], isLoading: projectsLoading } = useProjects()
+  const { data: rolesData = [] } = useRoles()
+  const updatePermissionsMutation = useUpdateUserPermissions()
+  const assignRoleMutation = useAssignRole()
+  const revokeRoleMutation = useRevokeRole()
+
   const [saving, setSaving] = useState(false)
 
   // Local state for editing
   const [allAccess, setAllAccess] = useState(false)
-  const [selectedParts, setSelectedParts] = useState<string[]>([])
-  const [selectedRoles, setSelectedRoles] = useState<UserRole[]>([])
+  const [selectedPartIds, setSelectedPartIds] = useState<number[]>([])
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([])
   const [roleError, setRoleError] = useState(false)
-  const [projectTree, setProjectTree] = useState<ProjectTreeItem[]>([])
+
+  // Get all part IDs from projects
+  const allPartIds = projects.flatMap((p: Project) => p.parts.map((pt) => pt.id))
 
   // Initialize state when user changes
   useEffect(() => {
     if (!open || !user) return
 
-    setLoading(true)
     setRoleError(false)
 
-    // Simulate loading the project tree and user's current settings
-    const timer = setTimeout(() => {
-      setProjectTree(SAMPLE_PROJECT_TREE)
-
-      if (user.partAccess === "all") {
-        setAllAccess(true)
-        setSelectedParts(getAllPartNames(SAMPLE_PROJECT_TREE))
-      } else {
-        setAllAccess(false)
-        setSelectedParts([...user.partAccess])
-      }
-      setSelectedRoles([...user.roles])
-      setLoading(false)
-    }, 500)
-
-    return () => clearTimeout(timer)
-  }, [open, user])
+    const isAdmin = user.roles.includes("admin")
+    if (isAdmin) {
+      setAllAccess(true)
+      setSelectedPartIds(allPartIds)
+    } else if (user.authorizedPartIds.length === allPartIds.length && allPartIds.length > 0) {
+      setAllAccess(true)
+      setSelectedPartIds(allPartIds)
+    } else {
+      setAllAccess(false)
+      setSelectedPartIds([...user.authorizedPartIds])
+    }
+    setSelectedRoles([...user.roles])
+  }, [open, user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAllAccessChange = useCallback(
     (checked: boolean) => {
       setAllAccess(checked)
       if (checked) {
-        setSelectedParts(getAllPartNames(projectTree))
+        setSelectedPartIds(allPartIds)
       }
     },
-    [projectTree]
+    [allPartIds]
   )
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     if (!user) return
 
     if (selectedRoles.length === 0) {
@@ -92,15 +97,40 @@ export function PermissionSettingsModal({
     }
 
     setSaving(true)
-    // Simulate save
-    setTimeout(() => {
-      const partAccess: PartAccess = allAccess ? "all" : [...selectedParts]
-      onSave(user.id, partAccess, selectedRoles)
-      setSaving(false)
+    try {
+      // Update part permissions
+      const partIds = allAccess ? allPartIds : selectedPartIds
+      await updatePermissionsMutation.mutateAsync({
+        userId: user.id,
+        data: { part_ids: partIds },
+      })
+
+      // Sync roles: add new, remove old
+      const rolesToAdd = selectedRoles.filter((r) => !user.roles.includes(r))
+      const rolesToRemove = user.roles.filter((r) => !selectedRoles.includes(r))
+
+      for (const roleName of rolesToAdd) {
+        const role = rolesData.find((rd) => rd.name === roleName)
+        if (role) {
+          await assignRoleMutation.mutateAsync({ user_id: user.id, role_id: role.id })
+        }
+      }
+      for (const roleName of rolesToRemove) {
+        const role = rolesData.find((rd) => rd.name === roleName)
+        if (role) {
+          await revokeRoleMutation.mutateAsync({ user_id: user.id, role_id: role.id })
+        }
+      }
+
+      onSaved?.()
       onOpenChange(false)
       toast.success("저장 완료")
-    }, 800)
-  }, [user, allAccess, selectedParts, selectedRoles, onSave, onOpenChange])
+    } catch {
+      toast.error("저장 실패")
+    } finally {
+      setSaving(false)
+    }
+  }, [user, allAccess, selectedPartIds, selectedRoles, allPartIds, updatePermissionsMutation, assignRoleMutation, revokeRoleMutation, rolesData, onSaved, onOpenChange])
 
   const handleCancel = useCallback(() => {
     if (saving) return
@@ -108,6 +138,15 @@ export function PermissionSettingsModal({
   }, [saving, onOpenChange])
 
   if (!user) return null
+
+  // Build project tree for PartPermissionTree
+  const projectTree = projects.map((p: Project) => ({
+    id: p.id,
+    name: p.name,
+    parts: p.parts.map((pt) => ({ id: pt.id, name: pt.name })),
+  }))
+
+  const loading = projectsLoading
 
   const userInfoCard = (
     <div className="flex items-center gap-3 rounded-lg border border-border bg-background p-3">
@@ -157,11 +196,11 @@ export function PermissionSettingsModal({
         <TabsContent value="parts" className="mt-4">
           <PartPermissionTree
             projectTree={projectTree}
-            selectedParts={selectedParts}
+            selectedPartIds={selectedPartIds}
             allAccess={allAccess}
             roles={selectedRoles}
             onAllAccessChange={handleAllAccessChange}
-            onPartsChange={setSelectedParts}
+            onPartsChange={setSelectedPartIds}
             isMobile={isMobile}
           />
         </TabsContent>

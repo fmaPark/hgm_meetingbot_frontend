@@ -2,15 +2,9 @@ import { type ReactNode } from "react"
 import { Loader2, Check, AlertTriangle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import type { MeetingStatus } from "@/lib/api/types"
 
-export type MeetingStatus =
-  | "RECORDING"
-  | "STOPPED"
-  | "TRANSCRIBED"
-  | "PROCESSING"
-  | "SUMMARIZED"
-  | "UPLOADED"
-  | "FAILED"
+export type { MeetingStatus }
 
 interface StatusConfig {
   label: string

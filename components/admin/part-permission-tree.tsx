@@ -4,21 +4,26 @@ import { useCallback, useMemo } from "react"
 import { Check, Minus, AlertCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Checkbox } from "@/components/ui/checkbox"
-import type { ProjectTreeItem, UserRole } from "@/lib/admin-types"
+
+interface ProjectTreeItem {
+  id: number
+  name: string
+  parts: { id: number; name: string }[]
+}
 
 interface PartPermissionTreeProps {
   projectTree: ProjectTreeItem[]
-  selectedParts: string[]
+  selectedPartIds: number[]
   allAccess: boolean
-  roles: UserRole[]
+  roles: string[]
   onAllAccessChange: (checked: boolean) => void
-  onPartsChange: (parts: string[]) => void
+  onPartsChange: (partIds: number[]) => void
   isMobile?: boolean
 }
 
 export function PartPermissionTree({
   projectTree,
-  selectedParts,
+  selectedPartIds,
   allAccess,
   roles,
   onAllAccessChange,
@@ -26,51 +31,49 @@ export function PartPermissionTree({
   isMobile = false,
 }: PartPermissionTreeProps) {
   const isAdmin = roles.includes("admin")
-  const allPartNames = useMemo(
-    () => projectTree.flatMap((p) => p.parts.map((pt) => pt.name)),
+  const allPartIds = useMemo(
+    () => projectTree.flatMap((p) => p.parts.map((pt) => pt.id)),
     [projectTree]
   )
 
   const handleProjectToggle = useCallback(
     (project: ProjectTreeItem) => {
-      const projectPartNames = project.parts.map((p) => p.name)
-      const allSelected = projectPartNames.every((name) => selectedParts.includes(name))
+      const projectPartIds = project.parts.map((p) => p.id)
+      const allSelected = projectPartIds.every((id) => selectedPartIds.includes(id))
 
       if (allSelected) {
-        // Uncheck all project parts
-        onPartsChange(selectedParts.filter((name) => !projectPartNames.includes(name)))
+        onPartsChange(selectedPartIds.filter((id) => !projectPartIds.includes(id)))
       } else {
-        // Check all project parts
-        const newParts = new Set([...selectedParts, ...projectPartNames])
+        const newParts = new Set([...selectedPartIds, ...projectPartIds])
         onPartsChange(Array.from(newParts))
       }
     },
-    [selectedParts, onPartsChange]
+    [selectedPartIds, onPartsChange]
   )
 
   const handlePartToggle = useCallback(
-    (partName: string) => {
-      if (selectedParts.includes(partName)) {
-        onPartsChange(selectedParts.filter((n) => n !== partName))
+    (partId: number) => {
+      if (selectedPartIds.includes(partId)) {
+        onPartsChange(selectedPartIds.filter((id) => id !== partId))
       } else {
-        onPartsChange([...selectedParts, partName])
+        onPartsChange([...selectedPartIds, partId])
       }
     },
-    [selectedParts, onPartsChange]
+    [selectedPartIds, onPartsChange]
   )
 
   const getProjectState = useCallback(
     (project: ProjectTreeItem): "checked" | "unchecked" | "indeterminate" => {
-      const projectPartNames = project.parts.map((p) => p.name)
-      const checkedCount = projectPartNames.filter((name) =>
-        selectedParts.includes(name)
+      const projectPartIds = project.parts.map((p) => p.id)
+      const checkedCount = projectPartIds.filter((id) =>
+        selectedPartIds.includes(id)
       ).length
 
       if (checkedCount === 0) return "unchecked"
-      if (checkedCount === projectPartNames.length) return "checked"
+      if (checkedCount === projectPartIds.length) return "checked"
       return "indeterminate"
     },
-    [selectedParts]
+    [selectedPartIds]
   )
 
   const indentClass = isMobile ? "pl-3" : "pl-4"
@@ -149,7 +152,7 @@ export function PartPermissionTree({
               {/* Part rows */}
               <div className={cn("flex flex-col gap-0.5", indentClass)}>
                 {project.parts.map((part) => {
-                  const isChecked = isDisabled || selectedParts.includes(part.name)
+                  const isChecked = isDisabled || selectedPartIds.includes(part.id)
 
                   return (
                     <label
@@ -161,7 +164,7 @@ export function PartPermissionTree({
                     >
                       <Checkbox
                         checked={isChecked}
-                        onCheckedChange={() => handlePartToggle(part.name)}
+                        onCheckedChange={() => handlePartToggle(part.id)}
                         disabled={isDisabled}
                         aria-label={part.name}
                       />

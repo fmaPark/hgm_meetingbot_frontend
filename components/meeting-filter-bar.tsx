@@ -11,11 +11,12 @@ import {
   SelectItem,
 } from "@/components/ui/select"
 import type { MeetingFilters } from "@/lib/meeting-types"
-import { PROJECTS, PARTS } from "@/lib/meeting-types"
 
 interface MeetingFilterBarProps {
   filters: MeetingFilters
   onFiltersChange: (filters: MeetingFilters) => void
+  projects?: string[]
+  parts?: string[]
   hasDeletePermission?: boolean
   onTrashClick?: () => void
 }
@@ -23,6 +24,8 @@ interface MeetingFilterBarProps {
 export function MeetingFilterBar({
   filters,
   onFiltersChange,
+  projects = [],
+  parts = [],
   hasDeletePermission = false,
   onTrashClick,
 }: MeetingFilterBarProps) {
@@ -82,7 +85,7 @@ export function MeetingFilterBar({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">전체 프로젝트</SelectItem>
-            {PROJECTS.map((p) => (
+            {projects.map((p) => (
               <SelectItem key={p} value={p}>{p}</SelectItem>
             ))}
           </SelectContent>
@@ -94,7 +97,7 @@ export function MeetingFilterBar({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">전체 파트</SelectItem>
-            {PARTS.map((p) => (
+            {parts.map((p) => (
               <SelectItem key={p} value={p}>{p}</SelectItem>
             ))}
           </SelectContent>
@@ -107,7 +110,7 @@ export function MeetingFilterBar({
             type="text"
             value={localSearch}
             onChange={(e) => handleSearchChange(e.target.value)}
-            placeholder="제목, 내용으로 검색"
+            placeholder="작성자 검색"
             className="h-9 w-full rounded-md border border-input bg-transparent py-1 pl-9 pr-9 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
           />
           {localSearch && (
@@ -144,7 +147,7 @@ export function MeetingFilterBar({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">전체 프로젝트</SelectItem>
-              {PROJECTS.map((p) => (
+              {projects.map((p) => (
                 <SelectItem key={p} value={p}>{p}</SelectItem>
               ))}
             </SelectContent>
@@ -156,7 +159,7 @@ export function MeetingFilterBar({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">전체 파트</SelectItem>
-              {PARTS.map((p) => (
+              {parts.map((p) => (
                 <SelectItem key={p} value={p}>{p}</SelectItem>
               ))}
             </SelectContent>
@@ -171,7 +174,7 @@ export function MeetingFilterBar({
               type="text"
               value={localSearch}
               onChange={(e) => handleSearchChange(e.target.value)}
-              placeholder="제목, 내용으로 검색"
+              placeholder="작성자 검색"
               className="h-9 w-full rounded-md border border-input bg-transparent py-1 pl-9 pr-9 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
             />
             {localSearch && (

@@ -1,14 +1,14 @@
-import type { MeetingStatus } from "@/components/status-badge"
+/**
+ * 회의 관련 UI 타입 정의
+ * API 타입(lib/api/types.ts)을 re-export하고 UI 전용 헬퍼를 제공
+ */
+import { format, formatDistanceToNowStrict, differenceInDays, parseISO } from "date-fns"
+import { ko } from "date-fns/locale"
+import type { Meeting as ApiMeeting, MeetingStatus } from "@/lib/api/types"
 
-export interface Meeting {
-  id: number
-  date: string // YYYY-MM-DD
-  project: string
-  part: string
-  title: string
-  host: string
-  status: MeetingStatus
-}
+// API Meeting 타입을 그대로 사용
+export type Meeting = ApiMeeting
+export type { MeetingStatus }
 
 export interface MeetingFilters {
   project: string // "all" | project name
@@ -16,7 +16,7 @@ export interface MeetingFilters {
   search: string
 }
 
-export type SortField = "date" | "project" | "part" | "status"
+export type SortField = "start_time" | "project" | "part" | "status"
 export type SortDirection = "asc" | "desc"
 
 export interface SortConfig {
@@ -24,118 +24,52 @@ export interface SortConfig {
   direction: SortDirection
 }
 
-export const SAMPLE_MEETINGS: Meeting[] = [
-  {
-    id: 1,
-    date: "2026-02-19",
-    project: "프로젝트A",
-    part: "기획파트",
-    title: "2월 정기 회의",
-    host: "김철수",
-    status: "SUMMARIZED",
-  },
-  {
-    id: 2,
-    date: "2026-02-18",
-    project: "프로젝트A",
-    part: "개발파트",
-    title: "스프린트 리뷰",
-    host: "이영희",
-    status: "PROCESSING",
-  },
-  {
-    id: 3,
-    date: "2026-02-16",
-    project: "프로젝트B",
-    part: "디자인파트",
-    title: "UI 검토 회의",
-    host: "박민수",
-    status: "STOPPED",
-  },
-  {
-    id: 4,
-    date: "2026-02-10",
-    project: "프로젝트A",
-    part: "기획파트",
-    title: "킥오프 미팅",
-    host: "최지은",
-    status: "UPLOADED",
-  },
-  {
-    id: 5,
-    date: "2026-02-08",
-    project: "프로젝트B",
-    part: "개발파트",
-    title: "버그 트리아지",
-    host: "정현우",
-    status: "FAILED",
-  },
-]
-
 export interface DeletedMeeting extends Meeting {
-  deletedAt: string // YYYY-MM-DD
-  daysUntilPermanent: number
+  // deleted_at은 이미 Meeting에 포함 (string | null)
 }
 
-export type TrashSortField = "date" | "project" | "part" | "status" | "deletedAt"
+export type TrashSortField = "start_time" | "project" | "part" | "status" | "deleted_at"
 
 export interface TrashSortConfig {
   field: TrashSortField
   direction: SortDirection
 }
 
-export const SAMPLE_DELETED_MEETINGS: DeletedMeeting[] = [
-  {
-    id: 101,
-    date: "2026-02-10",
-    project: "프로젝트A",
-    part: "기획파트",
-    title: "삭제된 회의 1",
-    host: "김철수",
-    status: "SUMMARIZED",
-    deletedAt: "2026-02-16",
-    daysUntilPermanent: 27,
-  },
-  {
-    id: 102,
-    date: "2026-02-08",
-    project: "프로젝트B",
-    part: "개발파트",
-    title: "삭제된 회의 2",
-    host: "이영희",
-    status: "STOPPED",
-    deletedAt: "2026-02-15",
-    daysUntilPermanent: 26,
-  },
-  {
-    id: 103,
-    date: "2026-02-05",
-    project: "프로젝트A",
-    part: "디자인파트",
-    title: "삭제된 회의 3",
-    host: "박민수",
-    status: "UPLOADED",
-    deletedAt: "2026-02-12",
-    daysUntilPermanent: 23,
-  },
-]
+// ─── Display Helpers ─────────────────────────────────────
 
-/** Format deleted-at date as relative (e.g. "3일 전") */
-export function formatDeletedRelative(dateStr: string): string {
-  const date = new Date(dateStr + "T00:00:00")
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+/** ISO datetime → "2026-02-19" 형식 */
+export function formatDate(isoStr: string): string {
+  return format(parseISO(isoStr), "yyyy-MM-dd")
+}
 
-  const diffMs = today.getTime() - date.getTime()
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+/** ISO datetime → "오늘", "어제", "3일 전", 또는 "2026-02-19" */
+export function formatRelativeDate(isoStr: string): string {
+  const date = parseISO(isoStr)
+  const now = new Date()
+  const diffDays = differenceInDays(now, date)
 
   if (diffDays === 0) return "오늘"
   if (diffDays === 1) return "어제"
-  return `${diffDays}일 전`
+  if (diffDays >= 2 && diffDays <= 7) return `${diffDays}일 전`
+  return format(date, "yyyy-MM-dd")
 }
 
-/** Format days until permanent deletion */
-export function formatDaysUntilPermanent(days: number): string {
+/** deleted_at → "3일 전" */
+export function formatDeletedRelative(isoStr: string): string {
+  return formatDistanceToNowStrict(parseISO(isoStr), { locale: ko, addSuffix: true })
+}
+
+/** 영구 삭제까지 남은 일수 계산 (30일 기준) */
+export function getDaysUntilPermanent(deletedAt: string): number {
+  const deletedDate = parseISO(deletedAt)
+  const now = new Date()
+  const elapsed = differenceInDays(now, deletedDate)
+  return Math.max(0, 30 - elapsed)
+}
+
+/** "N일 후 영구 삭제" */
+export function formatDaysUntilPermanent(deletedAt: string): string {
+  const days = getDaysUntilPermanent(deletedAt)
   return `${days}일 후 영구 삭제`
 }
 
@@ -148,24 +82,6 @@ export function isRestorable(status: MeetingStatus): boolean {
     status === "UPLOADED" ||
     status === "FAILED"
   )
-}
-
-export const PROJECTS = ["프로젝트A", "프로젝트B"]
-export const PARTS = ["기획파트", "개발파트", "디자인파트"]
-
-/** Format a date string relative to today */
-export function formatRelativeDate(dateStr: string): string {
-  const date = new Date(dateStr + "T00:00:00")
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-
-  const diffMs = today.getTime() - date.getTime()
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-
-  if (diffDays === 0) return "오늘"
-  if (diffDays === 1) return "어제"
-  if (diffDays >= 2 && diffDays <= 7) return `${diffDays}일 전`
-  return dateStr
 }
 
 /** Check if a meeting status allows "view detail" action */
@@ -199,7 +115,7 @@ export function isClickable(status: MeetingStatus): boolean {
   return status === "SUMMARIZED" || status === "UPLOADED"
 }
 
-/** Check if a meeting status is still processing */
+/** Check if any meetings have processing status */
 export function hasProcessingItems(meetings: Meeting[]): boolean {
   return meetings.some((m) => m.status === "PROCESSING")
 }

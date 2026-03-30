@@ -20,17 +20,36 @@ import type {
   TrashSortConfig,
   TrashSortField,
 } from "@/lib/meeting-types"
-import { SAMPLE_DELETED_MEETINGS } from "@/lib/meeting-types"
+import { useDeletedMeetings, useRestoreMeeting } from "@/lib/hooks/use-meetings"
+import { useProjects } from "@/lib/hooks/use-projects"
 
-const PAGE_SIZE = 10
+const PAGE_SIZE = 20
 
 export default function TrashPage() {
   const router = useRouter()
 
   // Data
-  const [meetings, setMeetings] = useState<DeletedMeeting[]>(SAMPLE_DELETED_MEETINGS)
-  const [loading, setLoading] = useState(false)
-  const [fadingId, setFadingId] = useState<number | null>(null)
+  const { data: meetings = [], isLoading: loading } = useDeletedMeetings()
+  const restoreMutation = useRestoreMeeting()
+  const { data: projects } = useProjects()
+
+  const [fadingId, setFadingId] = useState<string | null>(null)
+
+  // Derive project/part names for filter bar
+  const projectNames = useMemo(
+    () => projects?.map((p) => p.name) ?? [],
+    [projects]
+  )
+  const partNames = useMemo(() => {
+    if (!projects) return []
+    const parts = new Set<string>()
+    for (const project of projects) {
+      for (const part of project.parts) {
+        parts.add(part.name)
+      }
+    }
+    return Array.from(parts)
+  }, [projects])
 
   // Filters & sort
   const [filters, setFilters] = useState<MeetingFilters>({
@@ -39,7 +58,7 @@ export default function TrashPage() {
     search: "",
   })
   const [sort, setSort] = useState<TrashSortConfig>({
-    field: "deletedAt",
+    field: "deleted_at",
     direction: "desc",
   })
   const [currentPage, setCurrentPage] = useState(1)
@@ -49,9 +68,8 @@ export default function TrashPage() {
 
   // Restore dialog
   const [restoreTarget, setRestoreTarget] = useState<DeletedMeeting | null>(null)
-  const [restoreLoading, setRestoreLoading] = useState(false)
 
-  // ── Filter Logic ──
+  // ── Filter Logic (client-side, API returns all deleted) ──
   const filteredMeetings = useMemo(() => {
     let result = [...meetings]
 
@@ -64,9 +82,7 @@ export default function TrashPage() {
     if (filters.search.trim()) {
       const q = filters.search.toLowerCase()
       result = result.filter(
-        (m) =>
-          m.title.toLowerCase().includes(q) ||
-          m.host.toLowerCase().includes(q)
+        (m) => m.author_nick.toLowerCase().includes(q)
       )
     }
 
@@ -80,8 +96,8 @@ export default function TrashPage() {
     const dir = direction === "asc" ? 1 : -1
 
     result.sort((a, b) => {
-      const aVal = a[field]
-      const bVal = b[field]
+      const aVal = a[field] ?? ""
+      const bVal = b[field] ?? ""
       if (aVal < bVal) return -1 * dir
       if (aVal > bVal) return 1 * dir
       return 0
@@ -118,37 +134,17 @@ export default function TrashPage() {
     setViewTarget(meeting)
   }, [])
 
-  const handleRestoreFromModal = useCallback(
-    (meetingId: number) => {
-      // Remove from trash list and close modal
-      setFadingId(meetingId)
-      setTimeout(() => {
-        setMeetings((prev) => prev.filter((m) => m.id !== meetingId))
-        setFadingId(null)
-      }, 400)
-    },
-    []
-  )
-
   const handleRestoreConfirm = useCallback(() => {
     if (!restoreTarget) return
-    setRestoreLoading(true)
-
-    // Simulate async restore
-    setTimeout(() => {
-      setRestoreLoading(false)
-      setRestoreTarget(null)
-
-      // Fade out animation
-      const targetId = restoreTarget.id
-      setFadingId(targetId)
-
-      setTimeout(() => {
-        setMeetings((prev) => prev.filter((m) => m.id !== targetId))
-        setFadingId(null)
-      }, 400)
-    }, 1000)
-  }, [restoreTarget])
+    restoreMutation.mutate(restoreTarget.id, {
+      onSuccess: () => {
+        const targetId = restoreTarget.id
+        setRestoreTarget(null)
+        setFadingId(targetId)
+        setTimeout(() => setFadingId(null), 400)
+      },
+    })
+  }, [restoreTarget, restoreMutation])
 
   const handleResetFilters = useCallback(() => {
     setFilters({ project: "all", part: "all", search: "" })
@@ -212,6 +208,8 @@ export default function TrashPage() {
       <MeetingFilterBar
         filters={filters}
         onFiltersChange={handleFiltersChange}
+        projects={projectNames}
+        parts={partNames}
         hasDeletePermission={false}
       />
 
@@ -272,7 +270,6 @@ export default function TrashPage() {
         }}
         meeting={viewTarget}
         readOnly
-        onRestore={handleRestoreFromModal}
       />
 
       {/* Restore Confirmation Dialog */}
@@ -286,7 +283,7 @@ export default function TrashPage() {
         confirmText="복구"
         cancelText="취소"
         variant="default"
-        loading={restoreLoading}
+        loading={restoreMutation.isPending}
         onConfirm={handleRestoreConfirm}
         onCancel={() => setRestoreTarget(null)}
       />
